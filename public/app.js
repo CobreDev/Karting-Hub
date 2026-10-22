@@ -30,6 +30,27 @@ const fmtDate = (d) => {
 };
 /** Race Monitor's clock format: 49250 -> "00:49.250" */
 const fmtClock = (ms) => `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${((ms % 60000) / 1000).toFixed(3).padStart(6, '0')}`;
+/** "Cooper Hull" -> "Cooper H." for narrow screens; single names stay as they are. */
+const shortName = (name) => {
+  const parts = String(name).trim().split(/\s+/);
+  return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : parts[0];
+};
+
+/** Width of the lap list's Driver column, sized to the longest name on the team (full on desktop, short on phones). */
+let measureCtx;
+function driverColumnWidths(kart) {
+  measureCtx ||= document.createElement('canvas').getContext('2d');
+  const widest = (names, px, weight) => {
+    measureCtx.font = `${weight} ${px}px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    return Math.max(0, ...names.map((n) => measureCtx.measureText(n).width));
+  };
+  const names = [...new Set(kart.chunks.map((c) => c.d.driver))];
+  // name (semibold when highlighted) + avatar + gap, with a little slack
+  const full = Math.ceil(widest(names, 14, 600) + 22 + 8 + 6);
+  const short = Math.ceil(widest(names.map(shortName), 12, 600) + 18 + 4 + 2);
+  return `--dw:${Math.min(220, Math.max(90, full))}px;--dw-sm:${Math.min(110, Math.max(62, short))}px`;
+}
+
 /** Driver swatch: split team/driver color when the driver has their own color, otherwise the team color. */
 const swatch = (d, style = '') => `<span class="swatch" style="background:${d.ownColor ? `linear-gradient(135deg, ${d.teamColor} 50%, ${d.color} 50%)` : d.color};${style}"></span>`;
 const stintText =(e) => e.stints.map((s) => `${s.from}–${s.to}`).join(', ');
@@ -65,7 +86,12 @@ const avatar = (kind, name, size, ring, fallback = '') => {
   const url = photoUrl(kind, name);
   return url ? `<img class="avatar" src="${url}" alt="" width="${size}" height="${size}" loading="lazy" style="--ring:${ring}">` : fallback;
 };
-const driverAvatar = (d, size = 22) => avatar('drivers', d.driver, size, d.color, swatch(d));
+/** Ring for a driver: their color, split with the team color when they have a personal one. */
+const driverRingOf = (d) => (d.ownColor ? `linear-gradient(135deg, ${d.teamColor} 50%, ${d.color} 50%)` : d.color);
+/** Round initials badge used wherever a driver or team has no photo. */
+const initialsBadge = (name, size, ring) => `<span class="avatar placeholder" style="--ring:${ring};width:${size}px;height:${size}px;font-size:${Math.max(8, Math.round(size * 0.38))}px">${initials(name)}</span>`;
+const personAvatar = (name, size, ring) => avatar('drivers', name, size, ring, initialsBadge(name, size, ring));
+const driverAvatar = (d, size = 22) => personAvatar(d.driver, size, driverRingOf(d));
 const initials = (name) => esc(String(name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase());
 
 /**
@@ -287,7 +313,9 @@ async function showRace(id, focusKey, teamArg) {
 
   const fastest = ranked[0];
   const consistent = [...drivers].filter((d) => d.cleanCount >= 10).sort((a, b) => a.stdev - b.stdev)[0];
-  const totalLaps = race.karts.reduce((n, k) => n + k.laps.length, 0);
+  // Race distance is the most laps any kart completed (karts run at the same time, so don't add them up).
+  const lapsOf = (k) => (k.laps.length ? k.laps[k.laps.length - 1].lap : 0);
+  const raceLaps = Math.max(0, ...race.karts.map(lapsOf));
   const gaps = race.karts.map((k) => ({ k, miss: missingLaps(k.laps) })).filter((g) => g.miss.length);
 
   app.innerHTML = `
@@ -315,8 +343,10 @@ async function showRace(id, focusKey, teamArg) {
         <div class="sub">${esc(fastest.driver)} · #${esc(fastest.kart)} · lap ${fastest.bestLapNo}</div></div>` : ''}
       ${consistent ? `<div class="card tile"><div class="label">Most consistent</div><div class="value">±${(consistent.stdev / 1000).toFixed(3)}</div>
         <div class="sub">${esc(consistent.driver)} · std dev of clean laps</div></div>` : ''}
-      <div class="card tile"><div class="label">Laps recorded</div><div class="value">${totalLaps}</div>
-        <div class="sub">${race.karts.length} kart${race.karts.length === 1 ? '' : 's'} · ${drivers.length} driver stint${drivers.length === 1 ? '' : 's'}</div></div>
+      <div class="card tile"><div class="label">Race laps</div><div class="value">${raceLaps}</div>
+        <div class="sub">${race.karts.length > 1 && race.karts.length <= 4
+          ? race.karts.map((k) => `#${esc(k.number)} ${lapsOf(k)}`).join(' · ')
+          : `${race.karts.length} kart${race.karts.length === 1 ? '' : 's'}`} · ${drivers.length} driver${drivers.length === 1 ? '' : 's'}</div></div>
     </div>
 
     <section class="card section">
@@ -464,7 +494,7 @@ function lapSection(focus, karts, kart) {
       <button class="chip tab team-tab" type="button" role="tab" data-team="${esc(r.k.number)}" aria-pressed="${r === kart}" aria-selected="${r === kart}">
         ${avatar('teams', r.k.team, 18, r.color, `<span class="swatch" style="background:${r.color}"></span>`)}${esc(r.label)} <span class="muted">#${esc(r.k.number)}</span></button>`).join('')}</div>
 
-    <div class="rm" style="margin-top:14px">
+    <div class="rm" style="margin-top:14px;${driverColumnWidths(kart)}">
       <div class="rm-head">
         <div class="rm-team">${avatar('teams', kart.k.team, 32, kart.color, `<span class="swatch" style="background:${kart.color}"></span>`)}${esc(kart.label)} · #${esc(kart.k.number)}</div>
         <div class="rm-total"><span>Total:</span> ${kart.laps.length} laps</div>
@@ -488,8 +518,8 @@ function lapSection(focus, karts, kart) {
         return `<div class="rm-row ${l.c.d.key === focus?.key ? 'focused' : ''} ${handover ? 'handover' : ''}" style="--stint-color:${l.c.d.color}" ${l.lap === l.c.from && l.c.d.key === focus?.key ? 'id="focus-start"' : ''}>
           <span class="rm-lap">${l.lap}</span>
           <span class="rm-pos hide-sm">${l.pos ?? ''}</span>
-          <span class="rm-driver">${swatch(l.c.d)}${esc(l.c.d.driver)}</span>
-          <span class="rm-time ${isBest ? 'best-time' : ''}">${fmtClock(l.ms)}
+          <span class="rm-driver">${driverAvatar(l.c.d, 22)}<span class="dn-full">${esc(l.c.d.driver)}</span><span class="dn-short">${esc(shortName(l.c.d.driver))}</span></span>
+          <span class="rm-time ${isBest ? 'best-time' : ''}"><span class="t-full">${fmtClock(l.ms)}</span><span class="t-short">${fmtTime(l.ms)}</span>
             <i class="rm-bar ${kind}" style="width:${Math.min(100, (l.ms / scaleMax) * 100).toFixed(1)}%"></i></span>
           <span class="num rm-delta">${isBest ? '<span class="pill best">Best</span>' : fmtDelta(l.ms - l.c.best.ms)}</span>
           <span class="num rm-delta ${dPrev == null ? '' : dPrev < 0 ? 'faster' : 'slower'}">${dPrev == null ? '' : `${dPrev < 0 ? '▼' : '▲'} ${(Math.abs(dPrev) / 1000).toFixed(3)}`}</span>
@@ -1105,7 +1135,7 @@ function renderDrivers(message) {
           const saved = state.registry.some((o) => driverId(o.name) === driverId(d.name));
           return `<tr>
           <td><div class="driver-cell driver-name">
-            ${avatar('drivers', d.name, 36, ring, `<span class="avatar placeholder" style="--ring:${ring};width:36px;height:36px;font-size:13px">${initials(d.name)}</span>`)}
+            ${personAvatar(d.name, 36, ring)}
             <b>${esc(d.name)}</b></div></td>
           <td>${edit
             ? `<span class="driver-color ${d.color ? '' : 'unset'}"><input type="color" data-reg="${i}" value="${d.color || '#8e8d86'}" aria-label="Color for ${esc(d.name)}">${d.color ? `<button class="btn small clear-color" type="button" data-reg-clear="${i}" aria-label="Remove color">✕</button>` : ''}</span>`
@@ -1213,7 +1243,7 @@ function teamHistory(name) {
 
 const roleBadge = (role) => `<span class="role role-${role}" title="${ROLES[role].bound ? 'Tied to this team' : 'Can also race for other teams'}">${ROLES[role].label}</span>`;
 const driverRing = (name) => state.registry.find((d) => driverId(d.name) === driverId(name))?.color || 'var(--border)';
-const memberChip = (m) => `<span class="member">${avatar('drivers', m.driver, 20, driverRing(m.driver))}${esc(m.driver)} ${roleBadge(m.role)}</span>`;
+const memberChip = (m) => `<span class="member">${personAvatar(m.driver, 20, driverRing(m.driver))}${esc(m.driver)} ${roleBadge(m.role)}</span>`;
 
 function renderTeams(message) {
   const edit = state.config.editable;
@@ -1272,7 +1302,7 @@ function rosterEditor(t, i) {
   return `<div class="roster-editor">
     <p class="muted">Owner and core drivers are tied to ${esc(t.name)} and can't be owner/core of another team. Rotating drivers can be on other rosters too.</p>
     ${t.members.map((m, mi) => `<div class="roster-member">
-      <span class="driver-cell">${avatar('drivers', m.driver, 24, driverRing(m.driver), '')}<b>${esc(m.driver)}</b>
+      <span class="driver-cell">${personAvatar(m.driver, 24, driverRing(m.driver))}<b>${esc(m.driver)}</b>
         ${isSavedDriver(m.driver) ? '' : `<span class="pill warn" title="Rosters should only use drivers from the Drivers page">not on Drivers page</span>
         <button class="btn small" type="button" data-member-register="${esc(m.driver)}">Add to Drivers</button>`}</span>
       ${roleSelect(`data-member-role="${i}:${mi}" aria-label="Role for ${esc(m.driver)}"`, m.role)}
@@ -1452,7 +1482,7 @@ async function drawPreviewCard(race) {
   });
 
   // Race stats under the teams.
-  const lapCount = karts.reduce((n, k) => n + k.laps.length, 0);
+  const lapCount = Math.max(0, ...karts.map((k) => (k.laps.length ? k.laps[k.laps.length - 1].lap : 0)));
   const longest = Math.max(0, ...karts.map((k) => k.laps.reduce((a, l) => a + l.ms, 0)));
   const hrs = longest / 3600000;
   // 1:59:01 of laps reads as "2 h"; 1:30 as "1.5 h"; short races in minutes.

@@ -218,7 +218,7 @@ tr.flagged td { color: var(--text-muted); }
 .rm-sub b { font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .rm-cols, .rm-row {
   display: grid; align-items: center; column-gap: 12px; padding: 0 16px;
-  grid-template-columns: 44px 36px 90px minmax(130px, 260px) 72px 82px 1fr;
+  grid-template-columns: 44px 36px var(--dw, 90px) minmax(130px, 260px) 72px 82px 1fr;
 }
 .rm-cols { font-weight: 650; font-size: 15px; padding-top: 10px; padding-bottom: 6px; }
 .rm-row { border-bottom: 1px solid var(--grid); padding-top: 6px; padding-bottom: 0; font-variant-numeric: tabular-nums; }
@@ -252,15 +252,22 @@ tr.flagged td { color: var(--text-muted); }
 .rm-row { border-left: 4px solid transparent; }
 .rm-row.focused { border-left-color: var(--stint-color); background: color-mix(in srgb, var(--stint-color) 7%, transparent); }
 .rm-row.handover { border-top: 2px solid var(--stint-color); }
-.rm-driver { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.rm-driver { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; min-width: 0; }
+.rm-driver > span:not(.avatar) { overflow: hidden; text-overflow: ellipsis; }
+.rm-driver .dn-short, .rm-time .t-short { display: none; }
 .rm-row.focused .rm-driver { color: var(--text-primary); font-weight: 600; }
 .chart .change { stroke: var(--text-muted); stroke-width: 1; opacity: 0.45; }
 .chart .bridge { stroke: var(--text-muted); stroke-width: 1.5; stroke-dasharray: 5 4; opacity: 0.75; }
 .chart .change-label { fill: var(--text-secondary); font-size: 11px; }
 
 /* Profile pictures */
-.avatar { border-radius: 50%; object-fit: cover; flex: none; box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 3.5px var(--ring, var(--border)); background: var(--surface-2); }
-.avatar.placeholder { width: 48px; height: 48px; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 650; color: var(--text-secondary); }
+/* The ring is a border filled by --ring, which can be a color or a gradient (split team/personal color). */
+.avatar {
+  border-radius: 50%; object-fit: cover; flex: none; box-sizing: border-box;
+  border: 2px solid transparent;
+  background: linear-gradient(var(--surface-2), var(--surface-2)) padding-box, var(--ring, var(--border)) border-box;
+}
+.avatar.placeholder { width: 48px; height: 48px; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 650; color: var(--text-secondary); letter-spacing: 0.02em; line-height: 1; }
 .photo-picker { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .photo-picker .btn, .row-actions .btn { white-space: nowrap; }
 .row-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: center; }
@@ -353,12 +360,16 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   .tile .value { font-size: 19px; }
   .tile .sub { font-size: 11px; line-height: 1.3; }
   td, th { padding-left: 6px; padding-right: 6px; }
-  .rm-cols, .rm-row { grid-template-columns: 28px 62px minmax(0, 1fr) 56px 62px; column-gap: 6px; padding-left: 10px; padding-right: 10px; }
+  .rm-cols, .rm-row { grid-template-columns: 24px var(--dw-sm, 62px) minmax(0, 1fr) 64px 58px; column-gap: 5px; padding-left: 8px; padding-right: 8px; }
   .rm-driver { font-size: 12px; gap: 4px; }
-  .rm-driver .swatch { width: 8px; height: 8px; }
+  .rm-driver .avatar { width: 18px !important; height: 18px !important; font-size: 7px !important; border-width: 1.5px; }
+  .rm-driver .dn-full, .rm-time .t-full { display: none; }
+  .rm-driver .dn-short, .rm-time .t-short { display: inline; }
+  .driver-cell { white-space: normal; }
+  .driver-cell b, .driver-cell > span:not(.avatar):not(.swatch) { overflow-wrap: anywhere; }
   .rm-note { display: none; }
   .kart-tab-label { min-width: 0; width: 100%; }
   .rm-lap, .rm-pos { font-size: 16px; }
-  .rm-time { font-size: 18px; }
+  .rm-time { font-size: 16px; }
   .rm-delta { font-size: 12px; }
 }
