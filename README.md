@@ -85,9 +85,14 @@ See [docs/data-format.md](docs/data-format.md) for the file formats and how pit/
 Every push to `main` builds and publishes `ghcr.io/cobredev/karting-hub:latest` (see
 [Docker image builds](#docker-image-builds)).
 
-- **Docker tab (template)**: copy [`unraid/karting-hub.xml`](unraid/karting-hub.xml) to
-  `/boot/config/plugins/dockerMan/templates-user/my-karting-hub.xml`, then *Add Container* → *karting-hub*,
-  set the admin token, *Apply*.
+- **Unraid template (recommended)**:
+  1. *Docker* tab → scroll to **Template repositories** → add `https://github.com/CobreDev/Karting-Hub`
+     on its own line → **Save**.
+  2. **Add Container** → **Template** dropdown → **karting-hub** (under the CobreDev section).
+  3. Set **Admin token** to something long and random, check the **Data** path, then **Apply**.
+
+  The template is [`unraid/karting-hub.xml`](unraid/karting-hub.xml). To install it by hand instead, copy it
+  to `/boot/config/plugins/dockerMan/templates-user/my-karting-hub.xml`.
 - **Compose Manager plugin**: use [`docker-compose.yml`](docker-compose.yml) (change `ADMIN_TOKEN` first).
 
 Races are stored in `/mnt/user/appdata/karting-hub`. The container runs as `99:100` (nobody:users), which
@@ -134,7 +139,7 @@ public/
   lib/images.js      photo ids, size limits, image type check (shared with the server)
 scripts/import.mjs   CLI: Race Monitor .txt files -> race JSON
 test/                node:test suites
-unraid/              Unraid container template
+unraid/              Unraid container template and icon
 docs/                data format reference
 ```
 

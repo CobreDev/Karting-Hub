@@ -3,15 +3,24 @@
   <Name>karting-hub</Name>
   <Repository>ghcr.io/cobredev/karting-hub:latest</Repository>
   <Registry>https://github.com/CobreDev/Karting-Hub/pkgs/container/karting-hub</Registry>
-  <Support>https://github.com/CobreDev/Karting-Hub/issues</Support>
-  <Project>https://github.com/CobreDev/Karting-Hub</Project>
   <Network>bridge</Network>
+  <MyIP/>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
-  <Overview>Shareable karting lap-time dashboard built from Race Monitor exports.</Overview>
-  <Category>Tools:</Category>
+  <Support>https://github.com/CobreDev/Karting-Hub/issues</Support>
+  <Project>https://github.com/CobreDev/Karting-Hub</Project>
+  <Overview>Shareable lap-time dashboard for endurance karting races. Upload Race Monitor lap exports, split each kart into driver stints, give teams and drivers colors and photos, and send friends one link to see their best laps, averages and every lap of the race.&#xD;
+&#xD;
+Viewing is open to anyone with the URL. Uploading and editing need the Admin token. Races, the driver and team lists, and photos are stored in the Data folder.</Overview>
+  <Category>Tools: Other:</Category>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
-  <Config Name="Web port" Target="8080" Default="8080" Mode="tcp" Description="Dashboard port" Type="Port" Display="always" Required="true">8080</Config>
-  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/karting-hub" Mode="rw" Description="Where races are saved. Keep this mapped so races survive restarts and updates. Must be writable by 99:100 (nobody:users)." Type="Path" Display="always" Required="true">/mnt/user/appdata/karting-hub</Config>
-  <Config Name="Admin token" Target="ADMIN_TOKEN" Default="" Mode="" Description="Password for uploading/editing races. Leave empty for read-only." Type="Variable" Display="always" Required="false" Mask="true"></Config>
+  <TemplateURL>https://raw.githubusercontent.com/CobreDev/Karting-Hub/main/unraid/karting-hub.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/CobreDev/Karting-Hub/main/unraid/icon.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <Requires>The Data folder must be writable by uid 99 / gid 100 (nobody:users), which is the default for new appdata folders. If the log says it can't write, run: chown -R 99:100 /mnt/user/appdata/karting-hub</Requires>
+  <Config Name="WebUI Port" Target="8080" Default="8080" Mode="tcp" Description="Port the dashboard is served on." Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/karting-hub" Mode="rw" Description="Where races, the driver and team lists, and photos are saved. Keep this mapped so they survive restarts and updates." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/karting-hub</Config>
+  <Config Name="Admin token" Target="ADMIN_TOKEN" Default="" Mode="" Description="Password for uploading and editing races, drivers and teams. Use something long and random. Leave empty for a read-only dashboard." Type="Variable" Display="always" Required="false" Mask="true"/>
 </Container>
