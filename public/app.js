@@ -1,6 +1,6 @@
 import {
   parseRaceMonitor, mergeLaps, missingLaps, pitCandidates, computeDrivers,
-  fmtTime, fmtDelta, slugify, quantile, driverId, ROLES, teamListErrors, DEFAULT_SLOW_FACTOR,
+  fmtTime, fmtDelta, slugify, quantile, driverId, ROLES, teamListErrors, normalizeTeams, DEFAULT_SLOW_FACTOR,
 } from './lib/race.js';
 import { teamShades, isHex, DEFAULT_TEAM_COLORS } from './lib/color.js';
 import { imageId, IMAGE_SIZE } from './lib/images.js';
@@ -49,7 +49,7 @@ async function loadRegistry() {
     api('images').catch(() => null),
   ]);
   state.registry = drivers.drivers;
-  state.teams = teams.teams;
+  state.teams = normalizeTeams(teams.teams);
   if (images) state.images = images;
 }
 const savedTeam = (name) => state.teams.find((t) => driverId(t.name) === driverId(name));
@@ -890,7 +890,7 @@ async function saveRegistryFromRace(r) {
   for (const [id, color] of state.teamColorDraft) if (teams.has(id) && color) teams.get(id).color = color;
   const nextTeams = [...teams.values()];
   if (JSON.stringify(nextTeams) !== JSON.stringify(state.teams)) {
-    state.teams = (await api('teams', { method: 'PUT', auth: true, body: JSON.stringify({ teams: nextTeams }) })).teams;
+    state.teams = normalizeTeams((await api('teams', { method: 'PUT', auth: true, body: JSON.stringify({ teams: nextTeams }) })).teams);
   }
 }
 
@@ -1016,7 +1016,7 @@ function renderDrivers(message) {
     if (rosters.length) {
       const teams = state.teams.map((t) => ({ ...t, members: t.members.filter((m) => driverId(m.driver) !== driverId(d.name)) }));
       api('teams', { method: 'PUT', auth: true, body: JSON.stringify({ teams }) })
-        .then((res) => { state.teams = res.teams; renderDrivers(); })
+        .then((res) => { state.teams = normalizeTeams(res.teams); renderDrivers(); })
         .catch((e) => renderDrivers(`Removed ${esc(d.name)}, but couldn't update rosters: ${esc(e.message)}`));
     }
   }));
@@ -1048,7 +1048,7 @@ async function showTeams() {
     onSaved: (res) => {
       // Photo buttons appear once a new team is on the saved list.
       const before = state.teams.length;
-      state.teams = res.teams;
+      state.teams = normalizeTeams(res.teams);
       if (res.teams.length !== before && location.hash === '#/teams') renderTeams();
     },
     status: (kind, text) => { state.teamSave = { kind, text }; showSaveStatus(kind, text); },

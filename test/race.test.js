@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  parseLapTime, parseRaceMonitor, mergeLaps, missingLaps, computeDrivers, fmtTime, fmtDelta, driverId, teamListErrors,
+  parseLapTime, parseRaceMonitor, mergeLaps, missingLaps, computeDrivers, fmtTime, fmtDelta, driverId, teamListErrors, normalizeTeams,
 } from '../public/lib/race.js';
 import { teamShades } from '../public/lib/color.js';
 import { imageType, imageId } from '../public/lib/images.js';
@@ -117,4 +117,13 @@ test('team rosters: owner/core drivers are bound to one team, rotating drivers c
   assert.match(teamListErrors([{ name: 'A', members: [{ driver: 'X', role: 'boss' }] }])[0], /unknown role/);
   assert.match(teamListErrors([{ name: 'A' }, { name: 'a' }])[0], /duplicate team/);
   assert.match(teamListErrors([{ name: 'A', members: [{ driver: 'X', role: 'core' }, { driver: 'x', role: 'rotating' }] }])[0], /twice/);
+});
+
+test('normalizeTeams fills in missing members/color and drops nameless entries', () => {
+  const teams = normalizeTeams([{ name: 'Team Apex' }, { name: '' }, null, { name: 'Team Blue', color: '#2a78d6', members: [{ driver: 'Alex', role: 'owner' }, {}] }]);
+  assert.deepEqual(teams, [
+    { name: 'Team Apex', color: '', members: [] },
+    { name: 'Team Blue', color: '#2a78d6', members: [{ driver: 'Alex', role: 'owner' }] },
+  ]);
+  assert.deepEqual(normalizeTeams(undefined), []);
 });

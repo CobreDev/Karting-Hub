@@ -3,7 +3,7 @@ import http from 'node:http';
 import { readFile, writeFile, readdir, rename, unlink, mkdir, access, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { IMAGE_KINDS, MAX_IMAGE_BYTES, imageType } from './public/lib/images.js';
-import { teamListErrors } from './public/lib/race.js';
+import { teamListErrors, normalizeTeams } from './public/lib/race.js';
 import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -145,7 +145,10 @@ async function api(req, res, parts) {
   if (parts[1] === 'auth') return authorized(req) ? send(res, 200, { ok: true }) : send(res, 401, { error: 'bad token' });
   if (parts[1] === 'images') return images(req, res, parts[2], parts[3]);
   if (parts[1] === 'teams') {
-    if (req.method === 'GET') return send(res, 200, JSON.parse(await readFile(TEAMS, 'utf8').catch(() => '{"teams":[]}')));
+    if (req.method === 'GET') {
+      const stored = JSON.parse(await readFile(TEAMS, 'utf8').catch(() => '{"teams":[]}'));
+      return send(res, 200, { teams: normalizeTeams(stored.teams) });
+    }
     if (req.method !== 'PUT') return send(res, 405, { error: 'method not allowed' });
     if (!authorized(req)) return send(res, 401, { error: TOKEN ? 'bad or missing admin token' : 'editing disabled: set ADMIN_TOKEN' });
     let body;

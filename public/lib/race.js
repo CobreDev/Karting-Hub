@@ -175,6 +175,20 @@ export const ROLES = {
   rotating: { label: 'Rotating', bound: false },
 };
 
+/**
+ * Team list as stored, tidied for use: drops entries without a name and makes sure every team has a color
+ * string and a members array, so a hand-edited or older teams.json can't break a page.
+ */
+export function normalizeTeams(teams) {
+  return (Array.isArray(teams) ? teams : [])
+    .filter((t) => typeof t?.name === 'string' && t.name.trim())
+    .map((t) => ({
+      ...t,
+      color: typeof t.color === 'string' ? t.color : '',
+      members: (Array.isArray(t.members) ? t.members : []).filter((m) => typeof m?.driver === 'string' && m.driver.trim()),
+    }));
+}
+
 /** Problems with a team list (empty array when it's valid). Shared by the editor and the server. */
 export function teamListErrors(teams) {
   if (!Array.isArray(teams)) return ['teams must be an array'];
