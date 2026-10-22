@@ -58,7 +58,7 @@ docker build -t karting-hub .
 photos), `#/teams` (team list, colors, photos, rosters). The dashboard is rebuilt with `innerHTML` on each route change; clicks go through one delegated `app.onclick`. |
 | `public/lib/race.js` | `parseRaceMonitor`, `mergeLaps`, `missingLaps`, `pitCandidates`, `computeDrivers`, formatters. |
 | `public/lib/images.js` | `imageId`, `imageType` (magic-byte check), `IMAGE_SIZE`, `MAX_IMAGE_BYTES`. Used by the browser and `server.js`. |
-| `public/lib/color.js` | OKLCH helpers. `teamShades(hex, n, mode)` gives each driver a shade of the team color, clamped to a readable lightness band per theme. |
+| `public/lib/color.js` | OKLCH helpers. `teamShades(hex, n, mode)` steps a color's lightness, clamped to a readable lightness band per theme. |
 | `public/style.css` | Theme tokens on `:root`, dark mode under both `@media (prefers-color-scheme: dark) :root:not([data-theme="light"])` and `:root[data-theme="dark"]`. Mobile breakpoint is 640px. |
 
 Key UI pieces in `app.js`:
@@ -81,8 +81,8 @@ Key UI pieces in `app.js`:
 ## Charts and colors
 
 - Team color = `kart.color`, else a slot of `DEFAULT_TEAM_COLORS`. A driver's color = their personal color
-  from the driver list if set (lightness nudged per theme by `teamShades(hex, 1, mode)`), otherwise a shade of
-  the team color (first driver gets the team color, teammates lighter/darker steps).
+  from the driver list if set (lightness nudged per theme by `teamShades(hex, 1, mode)`), otherwise exactly
+  the team color, so teammates always match. Drivers with their own color show team + personal color together.
 - Text stays in the text tokens (`--text-primary/secondary/muted`), never the series color.
 - Lap-bar colors are status tokens (`--status-good/warn/crit`) and always come with a text label or pill.
 - If you change team colors or the palette, check that the two teams can still be told apart in both themes,

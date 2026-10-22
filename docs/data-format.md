@@ -70,7 +70,8 @@ One file per race in `DATA_DIR/races/<id>.json`.
 
 - Stints refer to drivers **by name**, matched ignoring case and surrounding spaces (`driverId`), so the same
   driver can be reused on different teams and in different races.
-- `color` is optional. Empty means the driver uses a shade of their team's color.
+- `color` is optional. Empty means the driver uses their team's color, like their teammates. When set,
+  the driver shows both: team color plus their own (a split swatch and a two-tone dashed chart line).
 - New names from a saved race are added automatically. Colors are set in the race editor or on the
   **Drivers** page. `PUT /api/drivers` replaces the whole list.
 

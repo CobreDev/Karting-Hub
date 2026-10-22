@@ -7,7 +7,7 @@ name and color, and send one link around so everyone can see their best lap, cle
 consistency, and every lap of the race.
 
 - **Drivers table**: best lap, gap to fastest, best-5 average, clean-lap average, median, std dev and pace spread.
-- **Lap-time chart**: one line per kart, colored by driver, with driver-change markers. Slow laps are dotted;
+- **Lap-time chart**: one line per kart in the team color, with driver-change markers. Slow laps are dotted;
   pit stops and other off-scale laps are skipped with a gray dashed line. Drivers with their own color get a
   two-tone dashed line (driver color + team color).
 - **Race Monitor-style lap list**: pick a team and see every lap in race order, with the driver, position, a
@@ -155,7 +155,7 @@ public/
   app.js             the whole UI: routing, dashboard, chart, lap list, editor
   style.css          theme tokens (light/dark) and layout
   lib/race.js        parsing, merging, stint splitting, stats, formatting (shared with Node)
-  lib/color.js       team color -> per-driver shades for light and dark mode
+  lib/color.js       OKLCH helpers: keep team and driver colors readable in light and dark mode
   lib/images.js      photo ids, size limits, image type check (shared with the server)
 scripts/import.mjs   CLI: Race Monitor .txt files -> race JSON
 test/                node:test suites

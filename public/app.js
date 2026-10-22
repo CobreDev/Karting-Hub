@@ -30,7 +30,7 @@ const fmtDate = (d) => {
 };
 /** Race Monitor's clock format: 49250 -> "00:49.250" */
 const fmtClock = (ms) => `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${((ms % 60000) / 1000).toFixed(3).padStart(6, '0')}`;
-/** Driver swatch: split team/driver color when the driver has their own color, otherwise their team shade. */
+/** Driver swatch: split team/driver color when the driver has their own color, otherwise the team color. */
 const swatch = (d, style = '') => `<span class="swatch" style="background:${d.ownColor ? `linear-gradient(135deg, ${d.teamColor} 50%, ${d.color} 50%)` : d.color};${style}"></span>`;
 const stintText =(e) => e.stints.map((s) => `${s.from}–${s.to}`).join(', ');
 /** Team color: the saved team's color, then the kart's own (older races), then a palette slot. */
@@ -174,7 +174,7 @@ function bindPhotoPickers(done) {
 
 /**
  * Drivers with a personal color (from the saved driver list) use it, nudged into each theme's readable band;
- * everyone else gets a shade of their team's color. Written as CSS variables so the theme toggle just works.
+ * everyone else uses exactly their team's color, so teammates match. Written as CSS variables so the theme toggle just works.
  */
 function applyTeamColors(race, drivers) {
   const vars = { light: [], dark: [] };
@@ -182,11 +182,11 @@ function applyTeamColors(race, drivers) {
   race.karts.forEach((k, ki) => {
     const mine = drivers.filter((d) => d.kart === k.number);
     for (const mode of ['light', 'dark']) {
-      const shades = teamShades(teamColor(k, ki), Math.max(1, mine.length), mode);
-      vars[mode].push(`--t-${ki}:${shades[0]}`);
-      mine.forEach((d, i) => {
+      const team = teamShades(teamColor(k, ki), 1, mode)[0];
+      vars[mode].push(`--t-${ki}:${team}`);
+      mine.forEach((d) => {
         const mineColor = own.get(driverId(d.driver));
-        vars[mode].push(`--d-${drivers.indexOf(d)}:${mineColor ? teamShades(mineColor, 1, mode)[0] : shades[i]}`);
+        vars[mode].push(`--d-${drivers.indexOf(d)}:${mineColor ? teamShades(mineColor, 1, mode)[0] : team}`);
       });
     }
     mine.forEach((d) => {
@@ -311,7 +311,7 @@ async function showRace(id, focusKey, teamArg) {
     </section>
 
     <section class="card section">
-      <div class="section-head"><h2>Lap times</h2><p>One line per kart, colored by driver. Tap a team to show or hide it.</p></div>
+      <div class="section-head"><h2>Lap times</h2><p>One line per kart in the team color. Tap a team to show or hide it.</p></div>
       <div class="chips" id="chips" style="margin-bottom:12px">${karts.map((r) => `
         <button class="chip" type="button" data-key="${esc(r.k.number)}" aria-pressed="${!state.hidden.has(r.k.number)}">
           <span class="swatch" style="background:${r.color}"></span>${esc(r.label)} <span class="muted">#${esc(r.k.number)}</span></button>`).join('')}</div>
@@ -476,7 +476,7 @@ function lapSection(focus, karts, kart) {
 }
 
 // ---------- lap time chart (hand-rolled SVG) ----------
-/** One line per kart, shaded by whoever was driving, with a labeled marker at each driver change. */
+/** One line per kart in the team color (two-tone for drivers with their own color), with a labeled marker at each driver change. */
 function lapChart(el, karts, focus) {
   if (!karts.length) { el.innerHTML = '<p class="muted">All karts hidden.</p>'; return; }
   const W = Math.max(320, el.clientWidth);
@@ -558,7 +558,7 @@ function lapChart(el, karts, focus) {
 
   el.innerHTML = `
     <div class="legend"><span>● best lap</span><span>│ driver change</span>${karts.some((r) => r.chunks.some((c) => c.d.ownColor)) ? '<span>two-tone = driver + team color</span>' : ''}<span>dotted = slow lap</span><span>gray dashes = pit stops (off scale; tap for time)</span></div>
-    <svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Lap time by lap number for each kart, shaded by driver">
+    <svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Lap time by lap number for each kart">
       ${yTicks.map((v) => `<line class="gridline" x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}"/>
         <text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${fmtTime(v).replace(/\.000$|0+$/, '').replace(/\.$/, '')}</text>`).join('')}
       ${xTicks.map((v) => `<text x="${x(v)}" y="${H - 8}" text-anchor="middle">${v}</text>`).join('')}
