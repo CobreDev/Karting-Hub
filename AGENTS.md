@@ -26,6 +26,8 @@ docker build -t karting-hub .
   without the owner asking. `package.json` has no `dependencies`, and the Dockerfile relies on that.
 - **`public/lib/*.js` is shared** between the browser, the CLI importer and the tests. Keep it free of DOM and
   Node APIs.
+- **Rosters only use saved drivers.** The Teams page picks members from `drivers.json` (a dropdown, not free
+  text); removing a driver on the Drivers page strips them from rosters. Both pages autosave via `autosaver()`.
 - **Teams are referenced by name too.** `DATA_DIR/teams.json` holds team colors and rosters. Roster roles
   are in `ROLES`: `owner`/`core` are bound to one team, `rotating` can be on many. Validate with
   `teamListErrors()`, which is shared by the UI and the server. `teamColor()` prefers the saved team color
@@ -49,6 +51,7 @@ docker build -t karting-hub .
 
 | File | Role |
 | --- | --- |
+| `docker-entrypoint.sh` | Starts as root (so hooks like Unraid's Tailscale integration can run), chowns `DATA_DIR` to `PUID:PGID` (default 99:100), then `su-exec`s the app. Without root it just runs the command. |
 | `server.js` | `node:http` server. Static files from `public/` with an SPA fallback, and a JSON API that reads/writes `DATA_DIR/races/<id>.json` (atomic tmp+rename). PUT/DELETE need `Authorization: Bearer $ADMIN_TOKEN` (constant-time compare). Creates an empty `drivers.json` / `teams.json` on first start; there is no bundled data. |
 | `public/app.js` | The whole UI. Hash routes: `#/` (race list), `#/r/:id` (dashboard), `#/r/:id/:driverKey` (highlight a driver),
 `#/r/:id/team/:kart` (open a team's lap list), `#/edit/:id`, `#/new`, `#/drivers` (driver list, colors,

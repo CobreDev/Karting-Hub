@@ -54,6 +54,28 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
 
+      # Run the real image before publishing: it must start, drop root to 99:100, own /data and save a race.
+      - name: Build for smoke test (amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: karting-hub:smoke
+          cache-from: type=gha
+
+      - name: Smoke test
+        run: |
+          docker run -d --name kh -e ADMIN_TOKEN=smoke -p 8080:8080 karting-hub:smoke
+          for i in $(seq 1 30); do curl -fs localhost:8080/api/health && break; sleep 1; done
+          curl -fs localhost:8080/api/health
+          docker exec kh grep -E '^Uid:\s+99\s' /proc/1/status
+          test "$(docker exec kh stat -c %u:%g /data/races)" = "99:100"
+          curl -fs -X PUT -H 'Authorization: Bearer smoke' -H 'Content-Type: application/json' \
+            -d '{"id":"smoke","name":"Smoke","karts":[]}' localhost:8080/api/races/smoke
+          curl -fs localhost:8080/api/races | grep -q '"id":"smoke"'
+          docker logs kh
+
       - name: Build (and push unless this is a pull request)
         uses: docker/build-push-action@v6
         with:

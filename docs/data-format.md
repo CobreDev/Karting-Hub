@@ -96,7 +96,8 @@ One file per race in `DATA_DIR/races/<id>.json`.
 - Races refer to teams **by name** (`kart.team`), matched like drivers (`driverId`).
 - `color` is the team color everywhere. It wins over the older per-race `kart.color`, which is only used
   for karts without a saved team.
-- `members` is the roster. Roles (`ROLES` in `race.js`): `owner` and `core` are **bound**, so a driver can be
+- `members` is the roster. Its drivers are picked from the driver list (removing a driver there also takes
+  them off rosters). Roles (`ROLES` in `race.js`): `owner` and `core` are **bound**, so a driver can be
   owner/core of only one team. `rotating` drivers can be on any number of rosters. `teamListErrors()`
   enforces this in both the browser and `PUT /api/teams`.
 - A roster is a list of who's on the team, not who drove: who drove is still each race's stints. The race

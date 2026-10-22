@@ -894,6 +894,45 @@ async function saveRegistryFromRace(r) {
   }
 }
 
+// ---------- autosave (Drivers and Teams pages) ----------
+/**
+ * Saves a list to the server right after each change. Saves run one at a time; a change made while one is in
+ * flight is picked up by the next, so the newest list always wins. `status()` reports progress for the page.
+ */
+function autosaver({ path, body, validate = () => [], onSaved, status }) {
+  let inFlight = null, pending = false;
+  const run = async () => {
+    const problems = validate();
+    if (problems.length) return status('error', 'Not saved yet — fix the problem above.');
+    if (!token.get()) return status('error', 'Enter your admin token to save changes.');
+    status('saving', 'Saving…');
+    try {
+      onSaved(await api(path, { method: 'PUT', auth: true, body: JSON.stringify(body()) }));
+      status('saved', 'All changes saved');
+    } catch (e) {
+      status('error', `Not saved: ${e.message}`);
+    }
+  };
+  return function save() {
+    if (inFlight) { pending = true; return inFlight; }
+    inFlight = run().finally(() => {
+      inFlight = null;
+      if (pending) { pending = false; save(); }
+    });
+    return inFlight;
+  };
+}
+
+/** Bottom bar for autosaving pages: save status plus the admin token field. */
+function saveBar(st) {
+  return `<div class="sticky-save"><span id="save-msg" class="save-status ${st?.kind || ''}">${esc(st?.text || 'Changes save automatically')}</span>
+    <input type="password" id="token" placeholder="Admin token" value="${esc(token.get())}" style="max-width:180px"></div>`;
+}
+function showSaveStatus(kind, text) {
+  const el = document.getElementById('save-msg');
+  if (el) { el.textContent = text; el.className = `save-status ${kind}`; }
+}
+
 // ---------- drivers ----------
 /** "Team Apex OWNER" style badges for every roster the driver is on. */
 function driverTeams(name) {
@@ -909,6 +948,18 @@ async function showDrivers() {
   const [races] = await Promise.all([api('races'), loadRegistry()]);
   state.driverDraft = state.registry.map((d) => ({ ...d }));
   state.driverRaces = races;
+  state.driverSave = null;
+  state.saveDrivers = autosaver({
+    path: 'drivers',
+    body: () => ({ drivers: state.driverDraft }),
+    onSaved: (res) => {
+      // Photo buttons appear once a new driver is on the saved list.
+      const before = state.registry.length;
+      state.registry = res.drivers;
+      if (res.drivers.length !== before && location.hash === '#/drivers') renderDrivers();
+    },
+    status: (kind, text) => { state.driverSave = { kind, text }; showSaveStatus(kind, text); },
+  });
   renderDrivers();
 }
 
@@ -937,7 +988,7 @@ function renderDrivers(message) {
             : d.color ? `<span class="swatch" style="background:${d.color};width:16px;height:16px"></span>` : '<span class="muted">team</span>'}</td>
           <td class="hide-sm">${driverTeams(d.name)}</td>
           <td class="secondary hide-sm">${rs.length ? rs.map((r) => `<a href="#/r/${encodeURIComponent(r.id)}">${esc(r.name)}</a>`).join(', ') : '<span class="muted">—</span>'}</td>
-          ${edit ? `<td><div class="row-actions">${saved ? photoButtons('drivers', d.name) : '<span class="muted" style="font-size:12px">save to add a photo</span>'}
+          ${edit ? `<td><div class="row-actions">${saved ? photoButtons('drivers', d.name) : '<span class="muted" style="font-size:12px">not saved yet</span>'}
             <button class="btn small danger" type="button" data-reg-remove="${i}">Remove</button></div></td>` : ''}
         </tr>`;
         }).join('') || `<tr><td colspan="4" class="muted">No drivers yet — they're added when you save a race.</td></tr>`}</tbody>
@@ -945,43 +996,41 @@ function renderDrivers(message) {
       ${edit ? `<div class="add-driver"><input type="text" id="new-driver" placeholder="Add a driver" maxlength="60"><button class="btn" id="add-driver" type="button">Add</button></div>` : ''}
       ${message ? `<div class="notice">${message}</div>` : ''}
     </section>
-    ${edit ? `<div class="sticky-save"><span id="save-msg" class="muted"></span>
-      <input type="password" id="token" placeholder="Admin token" value="${esc(token.get())}" style="max-width:180px">
-      <button class="btn primary" id="save-drivers" type="button">Save drivers</button></div>` : ''}`;
+    ${edit ? saveBar(state.driverSave) : ''}`;
   if (!edit) return;
   bindPhotoPickers((msg) => renderDrivers(msg));
+  const changed = () => { renderDrivers(); state.saveDrivers(); };
 
-  app.querySelectorAll('[data-reg]').forEach((el) => el.addEventListener('change', () => { state.driverDraft[+el.dataset.reg].color = el.value; renderDrivers(); }));
-  app.querySelectorAll('[data-reg-clear]').forEach((el) => el.addEventListener('click', () => { state.driverDraft[+el.dataset.regClear].color = ''; renderDrivers(); }));
+  app.querySelectorAll('[data-reg]').forEach((el) => el.addEventListener('change', () => { state.driverDraft[+el.dataset.reg].color = el.value; changed(); }));
+  app.querySelectorAll('[data-reg-clear]').forEach((el) => el.addEventListener('click', () => { state.driverDraft[+el.dataset.regClear].color = ''; changed(); }));
   app.querySelectorAll('[data-reg-remove]').forEach((el) => el.addEventListener('click', () => {
     const d = state.driverDraft[+el.dataset.regRemove];
-    if (racesFor(d.name).length && !confirm(`${d.name} is in saved races. Remove them from the list anyway? Their laps stay; they'll just lose their personal color.`)) return;
+    const rosters = state.teams.filter((t) => t.members.some((m) => driverId(m.driver) === driverId(d.name)));
+    const notes = [
+      racesFor(d.name).length && 'Their laps in saved races stay; they just lose their personal color and photo link.',
+      rosters.length && `They'll also be taken off the ${rosters.map((t) => t.name).join(' and ')} roster${rosters.length > 1 ? 's' : ''}.`,
+    ].filter(Boolean);
+    if (notes.length && !confirm(`Remove ${d.name}? ${notes.join(' ')}`)) return;
     state.driverDraft.splice(+el.dataset.regRemove, 1);
-    renderDrivers();
+    changed();
+    if (rosters.length) {
+      const teams = state.teams.map((t) => ({ ...t, members: t.members.filter((m) => driverId(m.driver) !== driverId(d.name)) }));
+      api('teams', { method: 'PUT', auth: true, body: JSON.stringify({ teams }) })
+        .then((res) => { state.teams = res.teams; renderDrivers(); })
+        .catch((e) => renderDrivers(`Removed ${esc(d.name)}, but couldn't update rosters: ${esc(e.message)}`));
+    }
   }));
   const add = () => {
     const name = document.getElementById('new-driver').value.trim();
     if (!name) return;
     if (state.driverDraft.some((d) => driverId(d.name) === driverId(name))) return renderDrivers(`${esc(name)} is already on the list.`);
     state.driverDraft.push({ name, color: '' });
-    renderDrivers();
+    changed();
   };
   document.getElementById('add-driver').addEventListener('click', add);
   document.getElementById('new-driver').addEventListener('keydown', (e) => e.key === 'Enter' && add());
-  document.getElementById('token').addEventListener('change', (e) => token.set(e.target.value.trim()));
-  document.getElementById('save-drivers').addEventListener('click', async () => {
-    const msg = document.getElementById('save-msg');
-    token.set(document.getElementById('token').value.trim());
-    msg.textContent = 'Saving…';
-    try {
-      state.registry = (await api('drivers', { method: 'PUT', auth: true, body: JSON.stringify({ drivers: state.driverDraft }) })).drivers;
-      state.driverDraft = state.registry.map((d) => ({ ...d }));
-      renderDrivers('Saved.');
-    } catch (e) {
-      msg.textContent = e.message;
-      msg.className = 'notice error';
-    }
-  });
+  // Entering the token retries a save that was waiting for it.
+  document.getElementById('token').addEventListener('change', (e) => { token.set(e.target.value.trim()); if (state.driverSave?.kind === 'error') state.saveDrivers(); });
 }
 
 // ---------- teams ----------
@@ -991,6 +1040,19 @@ async function showTeams() {
   state.teamDraft = state.teams.map((t) => ({ ...t, members: t.members.map((m) => ({ ...m })) }));
   state.teamRaces = races;
   state.openTeam = null;
+  state.teamSave = null;
+  state.saveTeams = autosaver({
+    path: 'teams',
+    body: () => ({ teams: state.teamDraft }),
+    validate: () => teamListErrors(state.teamDraft),
+    onSaved: (res) => {
+      // Photo buttons appear once a new team is on the saved list.
+      const before = state.teams.length;
+      state.teams = res.teams;
+      if (res.teams.length !== before && location.hash === '#/teams') renderTeams();
+    },
+    status: (kind, text) => { state.teamSave = { kind, text }; showSaveStatus(kind, text); },
+  });
   renderTeams();
 }
 
@@ -1040,7 +1102,7 @@ function renderTeams(message) {
             <td class="secondary hide-sm">${rs.length ? rs.map((r) => `<a href="#/r/${encodeURIComponent(r.id)}">${esc(r.name)}</a>`).join(', ') : '<span class="muted">—</span>'}</td>
             ${edit ? `<td class="actions-cell"><div class="row-actions">
               <button class="btn small" type="button" data-team-open="${i}" aria-expanded="${open}">${open ? 'Done' : 'Edit roster'}</button>
-              ${saved ? photoButtons('teams', t.name) : '<span class="muted" style="font-size:12px">save to add a photo</span>'}
+              ${saved ? photoButtons('teams', t.name) : '<span class="muted" style="font-size:12px">not saved yet</span>'}
               <button class="btn small danger" type="button" data-team-remove="${i}">Remove</button></div></td>` : ''}
           </tr>
           ${edit && open ? `<tr class="roster-row"><td colspan="5">${rosterEditor(t, i)}</td></tr>` : ''}`;
@@ -1050,48 +1112,58 @@ function renderTeams(message) {
       ${errors.length ? `<div class="notice error">${errors.map(esc).join('<br>')}</div>` : ''}
       ${message ? `<div class="notice">${message}</div>` : ''}
     </section>
-    <datalist id="driver-list">${state.registry.map((d) => `<option value="${esc(d.name)}">`).join('')}</datalist>
-    ${edit ? `<div class="sticky-save"><span id="save-msg" class="muted"></span>
-      <input type="password" id="token" placeholder="Admin token" value="${esc(token.get())}" style="max-width:180px">
-      <button class="btn primary" id="save-teams" type="button" ${errors.length ? 'disabled' : ''}>Save teams</button></div>` : ''}`;
+    ${edit ? saveBar(state.teamSave) : ''}`;
   if (!edit) return;
   bindPhotoPickers((msg) => renderTeams(msg));
   bindTeams();
 }
 
+const isSavedDriver = (name) => state.registry.some((d) => driverId(d.name) === driverId(name));
+
 function rosterEditor(t, i) {
   const onRoster = new Set(t.members.map((m) => driverId(m.driver)));
-  const history = teamHistory(t.name).filter((d) => !onRoster.has(driverId(d)));
+  // Rosters only take drivers from the Drivers page, so names can't drift apart.
+  const available = state.registry.filter((d) => !onRoster.has(driverId(d.name)));
+  const history = teamHistory(t.name).filter((d) => !onRoster.has(driverId(d)) && isSavedDriver(d));
   const roleSelect = (attrs, value) => `<select ${attrs}>${Object.entries(ROLES).map(([k, r]) => `<option value="${k}" ${k === value ? 'selected' : ''}>${r.label}</option>`).join('')}</select>`;
   return `<div class="roster-editor">
     <p class="muted">Owner and core drivers are tied to ${esc(t.name)} and can't be owner/core of another team. Rotating drivers can be on other rosters too.</p>
     ${t.members.map((m, mi) => `<div class="roster-member">
-      <span class="driver-cell">${avatar('drivers', m.driver, 24, driverRing(m.driver), '')}<b>${esc(m.driver)}</b></span>
+      <span class="driver-cell">${avatar('drivers', m.driver, 24, driverRing(m.driver), '')}<b>${esc(m.driver)}</b>
+        ${isSavedDriver(m.driver) ? '' : `<span class="pill warn" title="Rosters should only use drivers from the Drivers page">not on Drivers page</span>
+        <button class="btn small" type="button" data-member-register="${esc(m.driver)}">Add to Drivers</button>`}</span>
       ${roleSelect(`data-member-role="${i}:${mi}" aria-label="Role for ${esc(m.driver)}"`, m.role)}
       <button class="btn small" type="button" data-member-remove="${i}:${mi}" aria-label="Remove ${esc(m.driver)} from roster">✕</button>
     </div>`).join('')}
-    <div class="roster-add">
-      <input type="text" list="driver-list" autocomplete="off" placeholder="Driver name" id="member-name-${i}" maxlength="60">
+    ${available.length ? `<div class="roster-add">
+      <select id="member-name-${i}" aria-label="Driver to add">
+        <option value="">Choose a driver…</option>
+        ${available.map((d) => `<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('')}
+      </select>
       ${roleSelect(`id="member-role-${i}" aria-label="Role"`, 'core')}
       <button class="btn small" type="button" data-member-add="${i}">Add to roster</button>
-    </div>
+    </div>` : `<p class="muted">${state.registry.length
+      ? 'Everyone on the <a href="#/drivers">Drivers page</a> is already on this roster.'
+      : 'Add drivers on the <a href="#/drivers">Drivers page</a> first, then pick them here.'}</p>`}
     ${history.length ? `<div class="suggest">Raced for ${esc(t.name)}: ${history.map((d) => `<button class="btn small" type="button" data-member-quick="${i}" data-driver="${esc(d)}">+ ${esc(d)}</button>`).join('')}</div>` : ''}
   </div>`;
 }
 
 function bindTeams() {
   const draft = state.teamDraft;
+  const changed = (message) => { renderTeams(message); state.saveTeams(); };
   const ij = (v) => v.split(':').map(Number);
   const addMember = (i, name, role) => {
     name = name.trim();
-    if (!name) return;
+    if (!name) return renderTeams('Choose a driver to add.');
     const t = draft[i];
+    if (!isSavedDriver(name)) return renderTeams(`${esc(name)} isn't on the Drivers page yet.`);
     if (t.members.some((m) => driverId(m.driver) === driverId(name))) return renderTeams(`${esc(name)} is already on ${esc(t.name)}.`);
     const known = state.registry.find((d) => driverId(d.name) === driverId(name));
     t.members.push({ driver: known ? known.name : name, role });
-    renderTeams();
+    changed();
   };
-  app.querySelectorAll('[data-team-color]').forEach((el) => el.addEventListener('change', () => { draft[+el.dataset.teamColor].color = el.value; renderTeams(); }));
+  app.querySelectorAll('[data-team-color]').forEach((el) => el.addEventListener('change', () => { draft[+el.dataset.teamColor].color = el.value; changed(); }));
   app.querySelectorAll('[data-team-open]').forEach((el) => el.addEventListener('click', () => {
     state.openTeam = state.openTeam === +el.dataset.teamOpen ? null : +el.dataset.teamOpen;
     renderTeams();
@@ -1101,24 +1173,33 @@ function bindTeams() {
     if (!confirm(`Remove ${t.name} from the team list? Races keep their laps; the team just loses its saved color, photo link and roster.`)) return;
     draft.splice(+el.dataset.teamRemove, 1);
     state.openTeam = null;
-    renderTeams();
+    changed();
   }));
   app.querySelectorAll('[data-member-role]').forEach((el) => el.addEventListener('change', () => {
     const [i, mi] = ij(el.dataset.memberRole);
     draft[i].members[mi].role = el.value;
-    renderTeams();
+    changed();
   }));
   app.querySelectorAll('[data-member-remove]').forEach((el) => el.addEventListener('click', () => {
     const [i, mi] = ij(el.dataset.memberRemove);
     draft[i].members.splice(mi, 1);
-    renderTeams();
+    changed();
   }));
   app.querySelectorAll('[data-member-add]').forEach((el) => {
     const i = +el.dataset.memberAdd;
     const add = () => addMember(i, document.getElementById(`member-name-${i}`).value, document.getElementById(`member-role-${i}`).value);
     el.addEventListener('click', add);
-    document.getElementById(`member-name-${i}`).addEventListener('keydown', (e) => e.key === 'Enter' && add());
   });
+  // Fix up roster names that aren't on the Drivers page (e.g. typed in before rosters used a dropdown).
+  app.querySelectorAll('[data-member-register]').forEach((el) => el.addEventListener('click', async () => {
+    const name = el.dataset.memberRegister;
+    try {
+      state.registry = (await api('drivers', { method: 'PUT', auth: true, body: JSON.stringify({ drivers: [...state.registry, { name, color: '' }] }) })).drivers;
+      renderTeams(`${esc(name)} added to the Drivers page.`);
+    } catch (e) {
+      renderTeams(`Couldn't add ${esc(name)}: ${esc(e.message)}`);
+    }
+  }));
   app.querySelectorAll('[data-member-quick]').forEach((el) => el.addEventListener('click', () => addMember(+el.dataset.memberQuick, el.dataset.driver, 'rotating')));
   const addTeam = () => {
     const name = document.getElementById('new-team').value.trim();
@@ -1126,25 +1207,12 @@ function bindTeams() {
     if (draft.some((t) => driverId(t.name) === driverId(name))) return renderTeams(`${esc(name)} is already on the list.`);
     draft.push({ name, color: '', members: [] });
     state.openTeam = draft.length - 1;
-    renderTeams();
+    changed();
   };
   document.getElementById('add-team').addEventListener('click', addTeam);
   document.getElementById('new-team').addEventListener('keydown', (e) => e.key === 'Enter' && addTeam());
-  document.getElementById('token').addEventListener('change', (e) => token.set(e.target.value.trim()));
-  document.getElementById('save-teams').addEventListener('click', async () => {
-    const msg = document.getElementById('save-msg');
-    token.set(document.getElementById('token').value.trim());
-    msg.textContent = 'Saving…';
-    try {
-      state.teams = (await api('teams', { method: 'PUT', auth: true, body: JSON.stringify({ teams: draft }) })).teams;
-      state.teamDraft = state.teams.map((t) => ({ ...t, members: t.members.map((m) => ({ ...m })) }));
-      state.openTeam = null;
-      renderTeams('Saved.');
-    } catch (e) {
-      msg.textContent = e.message;
-      msg.className = 'notice error';
-    }
-  });
+  // Entering the token retries a save that was waiting for it.
+  document.getElementById('token').addEventListener('change', (e) => { token.set(e.target.value.trim()); if (state.teamSave?.kind === 'error') state.saveTeams(); });
 }
 
 // ---------- boot ----------

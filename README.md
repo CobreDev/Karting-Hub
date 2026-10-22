@@ -12,8 +12,9 @@ consistency, and every lap of the race.
   two-tone dashed line (driver color + team color).
 - **Race Monitor-style lap list**: pick a team and see every lap in race order, with the driver, position, a
   lap-time bar (green / yellow / red), Δ to the driver's best and Δ to the previous lap.
-- **Teams page with rosters**: each team's color, photo and roster. Owner and core drivers are tied to one
-  team; rotating drivers can race for several.
+- **Teams page with rosters**: each team's color, photo and roster, picked from the Drivers page. Owner and
+  core drivers are tied to one team; rotating drivers can race for several. The Drivers and Teams pages save
+  every change automatically.
 - **Driver list with personal colors and photos**: drivers are saved once and reused across races and teams.
   Teams can have a photo too. Photos are cropped square and shrunk to 256×256 in the browser before upload.
 - **Per-driver links** (`#/r/<race>/<driver>|<kart>`) jump straight to that driver's laps.
@@ -39,6 +40,7 @@ Open http://localhost:8080. Viewing is open to anyone with the URL; **+ New race
 | `ADMIN_TOKEN` | *(empty)* | Password for uploads and edits. Empty = read-only dashboard. |
 | `PORT` | `8080` | HTTP port inside the container. |
 | `DATA_DIR` | `/data` | Where races are stored (`/data/races/*.json`). Mount a volume here. |
+| `PUID` / `PGID` | `99` / `100` | User and group the app runs as, and owns `/data` with (Unraid's `nobody:users`). |
 
 ### Your data
 
@@ -50,9 +52,10 @@ to `/mnt/user/appdata/karting-hub`.
 
 - **Always mount `/data`.** Without a mapping, Docker keeps the data in an anonymous volume. That survives a
   restart but is left behind when the container is recreated, which is what an Unraid update does.
-- **The folder must be writable by uid 99 / gid 100** (Unraid's `nobody:users`). If it isn't, the container
-  stops at startup with a message saying so. Fix it with
-  `chown -R 99:100 /mnt/user/appdata/karting-hub`.
+- **Permissions are handled for you.** The container starts as root just long enough to give the data folder to
+  `PUID:PGID` (99:100 by default), then runs the app as that user. If you force a different user with
+  `--user`, that user must be able to write the folder; the container stops at startup with a clear message if
+  it can't.
 - **A new install starts empty.** The app creates `races/`, `drivers.json`, `teams.json` and `images/` on
   first start and never overwrites existing files.
 - **Back up** by copying the folder. The Appdata Backup plugin on Unraid covers it automatically. To restore or
@@ -95,13 +98,30 @@ Every push to `main` builds and publishes `ghcr.io/cobredev/karting-hub:latest` 
   to `/boot/config/plugins/dockerMan/templates-user/my-karting-hub.xml`.
 - **Compose Manager plugin**: use [`docker-compose.yml`](docker-compose.yml) (change `ADMIN_TOKEN` first).
 
-Races are stored in `/mnt/user/appdata/karting-hub`. The container runs as `99:100` (nobody:users), which
+Races are stored in `/mnt/user/appdata/karting-hub`. The app runs as `99:100` (nobody:users), which
 matches Unraid's appdata ownership. To update, *Check for updates* / *Force update* in the Docker tab, or
 `docker compose pull && docker compose up -d`.
 
-**Sharing outside your network:** `http://tower:8080` only works at home. Put it behind a Cloudflare Tunnel,
-Tailscale Funnel, or your reverse proxy (SWAG / Nginx Proxy Manager) to give friends a public URL, and use a
-strong `ADMIN_TOKEN`.
+**Sharing outside your network:** `http://tower:8080` only works at home. To give friends a public HTTPS link,
+use Tailscale Funnel (below), a Cloudflare Tunnel, or your reverse proxy (SWAG / Nginx Proxy Manager). Whatever
+you use, set a long random `ADMIN_TOKEN` (e.g. `openssl rand -hex 24`): it's the only thing protecting edits.
+
+### Tailscale Funnel on Unraid
+
+Unraid 7 can put a container on your tailnet and publish it with Funnel. The image supports this: it starts as
+root so Unraid's Tailscale hook can run, then drops the app to `PUID:PGID`.
+
+1. In the Tailscale admin console, make sure **MagicDNS** and **HTTPS certificates** are on (*DNS* page), and that
+   your tailnet policy allows Funnel (the `funnel` node attribute; new tailnets allow it by default).
+2. Edit the **karting-hub** container and turn on **Use Tailscale**. Set:
+   - **Tailscale Hostname**: e.g. `karting`
+   - **Tailscale Serve**: `Funnel`
+   - **Tailscale Serve Port**: `8080` (the port *inside* the container)
+   - leave the state directory at its default so the login survives updates.
+3. **Apply**, then open the container's log (or the Tailscale page in Unraid). The first start prints a login
+   link; open it to add the container to your tailnet.
+4. Your friends' link is `https://karting.<your-tailnet>.ts.net`. Changes save straight from that page too,
+   once you enter the admin token.
 
 ## Docker image builds
 

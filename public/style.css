@@ -280,11 +280,19 @@ a.member:hover { text-decoration: none; border-color: var(--text-muted); }
 .role-owner, .role-core { color: var(--text-primary); border: 1px solid var(--text-muted); }
 .role-rotating { border: 1px dashed var(--border); }
 .roster-row td { background: var(--surface-2); }
+.pill.warn { color: var(--danger); border: 1px solid currentColor; background: transparent; }
+.roster-member .driver-cell { flex-wrap: wrap; }
 .roster-editor p { margin: 0 0 10px; font-size: 13px; }
 .roster-member, .roster-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
 .roster-member .driver-cell { min-width: 160px; }
 .roster-add input { max-width: 220px; }
 select { font: inherit; font-size: 14px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); }
+
+/* Autosave status */
+.save-status { font-size: 13px; color: var(--text-muted); }
+.save-status.saved { color: var(--good); }
+.save-status.saved::before { content: '✓ '; }
+.save-status.error { color: var(--danger); }
 
 /* Editor */
 .driver-color { display: inline-flex; align-items: center; gap: 4px; }

@@ -39,7 +39,7 @@ async function init() {
     const uid = process.getuid?.() ?? '?';
     const gid = process.getgid?.() ?? '?';
     console.error(`Cannot write to ${RACES} (${e.code}). Races would not be saved.\n` +
-      `Make the mounted data folder writable by uid ${uid}, e.g. on Unraid: chown -R ${uid}:${gid} /mnt/user/appdata/karting-hub`);
+      `Make the mounted data folder writable by uid ${uid}:${gid} (the container fixes this itself unless it was started with --user).`);
     process.exit(1);
   }
   // The driver and team lists (names, colors, rosters) are shared by every race; start them empty.
