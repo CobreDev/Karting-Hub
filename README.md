@@ -19,8 +19,8 @@ consistency, and every lap of the race.
   Teams can have a photo too. Photos are cropped square and shrunk to 256×256 in the browser before upload.
 - **Per-driver links** (`/r/<race>/<driver>|<kart>`) jump straight to that driver's laps.
 - **Link previews** for iMessage, Slack, Discord and others: race links show a card with the teams, fastest lap
-  and driver, date and track. The card is drawn when you save a race (or **Update preview** on the race page);
-  set `PUBLIC_URL` so previews use your public address.
+  and driver, date and track. The card is redrawn automatically when a race is saved or a
+  photo or color it uses changes; set `PUBLIC_URL` so previews use your public address.
 - **Editor**: drop in Race Monitor files, merge split sessions, set teams, colors and driver changes.
 - Light and dark mode, works on phones, zero dependencies.
 
@@ -110,6 +110,7 @@ matches Unraid's appdata ownership. To update, *Check for updates* / *Force upda
 **Sharing outside your network:** `http://tower:8080` only works at home. To give friends a public HTTPS link,
 use Tailscale Funnel (below), a Cloudflare Tunnel, or your reverse proxy (SWAG / Nginx Proxy Manager). Whatever
 you use, set a long random `ADMIN_TOKEN` (e.g. `openssl rand -hex 24`): it's the only thing protecting edits.
+After 10 wrong tokens in 15 minutes, that address is locked out of editing for 15 minutes.
 
 ### Tailscale Funnel on Unraid
 
@@ -192,3 +193,8 @@ docs/                data format reference
 Race Monitor has an API (`api.race-monitor.com`), but it's only for authorized apps and access is by request
 from Race Monitor. Until there's an API key, upload the `.txt` exports. The public results pages only show
 each kart's totals, not individual laps.
+
+## What's next
+
+See [ROADMAP.md](ROADMAP.md) for planned features (driver and team pages, race results, head-to-head,
+track records), exports/backups, and test and code-organization work.

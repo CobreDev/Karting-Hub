@@ -61,6 +61,38 @@ function send(res, status, body, headers = {}) {
   res.end(isJson ? JSON.stringify(body) : body);
 }
 
+// Wrong-token lockout: 10 wrong tokens within 15 minutes locks that address out for 15 minutes.
+// Keyed by the client's address (X-Forwarded-For first, as set by Tailscale Funnel or a proxy).
+const MAX_FAILS = 10;
+const WINDOW_MS = 15 * 60 * 1000;
+const failures = new Map(); // address -> { count, first, lockedUntil }
+const clientKey = (req) => String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '?';
+
+/** Sends 401/429 and returns false unless the request has the admin token. Only actual guesses count as failures. */
+function checkAuth(req, res) {
+  if (!TOKEN) { send(res, 401, { error: 'editing disabled: set ADMIN_TOKEN' }); return false; }
+  const key = clientKey(req);
+  const now = Date.now();
+  if (failures.size > 1000) for (const [k, v] of failures) if (now - v.first > WINDOW_MS && v.lockedUntil < now) failures.delete(k);
+  const f = failures.get(key);
+  if (f?.lockedUntil > now) {
+    send(res, 429, { error: `too many wrong tokens — try again in ${Math.ceil((f.lockedUntil - now) / 60000)} min` }, { 'Retry-After': String(Math.ceil((f.lockedUntil - now) / 1000)) });
+    return false;
+  }
+  if (authorized(req)) { failures.delete(key); return true; }
+  if (req.headers.authorization) {
+    const entry = f && now - f.first < WINDOW_MS ? f : { count: 0, first: now, lockedUntil: 0 };
+    entry.count++;
+    if (entry.count >= MAX_FAILS) {
+      entry.lockedUntil = now + WINDOW_MS;
+      console.warn(`locked out ${key} after ${entry.count} wrong admin tokens`);
+    }
+    failures.set(key, entry);
+  }
+  send(res, 401, { error: 'bad or missing admin token' });
+  return false;
+}
+
 function authorized(req) {
   if (!TOKEN) return false;
   const given = Buffer.from((req.headers.authorization || '').replace(/^Bearer\s+/i, ''));
@@ -144,7 +176,7 @@ async function api(req, res, parts) {
   const [, , id] = parts; // /api/races/:id -> ['', 'races', id]
   if (parts[1] === 'health') return send(res, 200, { ok: true });
   if (parts[1] === 'config') return send(res, 200, { editable: !!TOKEN });
-  if (parts[1] === 'auth') return authorized(req) ? send(res, 200, { ok: true }) : send(res, 401, { error: 'bad token' });
+  if (parts[1] === 'auth') return checkAuth(req, res) && send(res, 200, { ok: true });
   if (parts[1] === 'images') return images(req, res, parts[2], parts[3]);
   if (parts[1] === 'teams') {
     if (req.method === 'GET') {
@@ -152,7 +184,7 @@ async function api(req, res, parts) {
       return send(res, 200, { teams: normalizeTeams(stored.teams) });
     }
     if (req.method !== 'PUT') return send(res, 405, { error: 'method not allowed' });
-    if (!authorized(req)) return send(res, 401, { error: TOKEN ? 'bad or missing admin token' : 'editing disabled: set ADMIN_TOKEN' });
+    if (!checkAuth(req, res)) return;
     let body;
     try {
       body = JSON.parse(await readBody(req));
@@ -174,7 +206,7 @@ async function api(req, res, parts) {
   if (parts[1] === 'drivers') {
     if (req.method === 'GET') return send(res, 200, JSON.parse(await readFile(DRIVERS, 'utf8').catch(() => '{"drivers":[]}')));
     if (req.method !== 'PUT') return send(res, 405, { error: 'method not allowed' });
-    if (!authorized(req)) return send(res, 401, { error: TOKEN ? 'bad or missing admin token' : 'editing disabled: set ADMIN_TOKEN' });
+    if (!checkAuth(req, res)) return;
     let body;
     try {
       body = JSON.parse(await readBody(req));
@@ -204,7 +236,7 @@ async function api(req, res, parts) {
       return send(res, 404, { error: 'race not found' });
     }
   }
-  if (!authorized(req)) return send(res, 401, { error: TOKEN ? 'bad or missing admin token' : 'editing disabled: set ADMIN_TOKEN' });
+  if (!checkAuth(req, res)) return;
 
   if (req.method === 'PUT') {
     let race;
@@ -244,7 +276,7 @@ async function images(req, res, kind, id) {
     return send(res, 200, out);
   }
   if (!IMAGE_KINDS.includes(kind) || !ID_RE.test(id || '')) return send(res, 400, { error: 'bad image path' });
-  if (!authorized(req)) return send(res, 401, { error: TOKEN ? 'bad or missing admin token' : 'editing disabled: set ADMIN_TOKEN' });
+  if (!checkAuth(req, res)) return;
   if (req.method === 'DELETE') {
     await unlink(imageFile(kind, id)).catch(() => {});
     return send(res, 200, { ok: true });

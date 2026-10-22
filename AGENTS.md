@@ -42,8 +42,11 @@ docker build -t karting-hub .
   (`serveIndex` / `previewMeta`). Navigate with `navigate(path)`; `<a href="/…">` links are intercepted. Old `#/`
   links are redirected on load.
 - **Preview cards are drawn in the browser** (`drawPreviewCard`, canvas 1200×630 PNG) and uploaded as
-  `images/previews/<race id>` on race save, on **Update preview**, or the first time an admin opens a race without
-  one. Facts come from `raceSummary()`, shared with the server's `og:description`.
+  `images/previews/<race id>` on race save, whenever a photo/color a race uses changes (`refreshPreviews()`), or the
+  first time an admin opens a race without one. Facts come from `raceSummary()`, shared with the server's `og:description`.
+- **Admin auth goes through `checkAuth()`** in `server.js`, which adds the wrong-token lockout (10 per 15 min per
+  address). Use it for any new admin endpoint, never `authorized()` directly.
+- **Planned work** is in [ROADMAP.md](ROADMAP.md).
 - **Photos are resized in the browser** (`resizeImage`, 256×256 square). The server never decodes images:
   it checks magic bytes (`imageType`) and size, and stores the bytes. Keep it that way; no image libraries.
   Photos are keyed by `imageId(name)`, the same name-based identity as driver colors.

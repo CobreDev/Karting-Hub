@@ -180,6 +180,7 @@ function bindPhotoPickers(done) {
       const blob = await resizeImage(file);
       const { version } = await call(kind, name, { method: 'PUT', body: blob, headers: { 'Content-Type': blob.type } });
       state.images[kind][imageId(name)] = version;
+      refreshPreviews({ [kind]: [name] });
       done(`Photo saved for ${esc(name)} (${Math.round(blob.size / 1024)} KB).`);
     } catch (e) {
       done(`Couldn't save the photo: ${esc(e.message)}`);
@@ -191,6 +192,7 @@ function bindPhotoPickers(done) {
     try {
       await call(kind, name, { method: 'DELETE' });
       delete state.images[kind][imageId(name)];
+      refreshPreviews({ [kind]: [name] });
       done(`Photo removed for ${esc(name)}.`);
     } catch (e) {
       done(`Couldn't remove the photo: ${esc(e.message)}`);
@@ -327,7 +329,6 @@ async function showRace(id, focusKey, teamArg) {
       </div>
       <div class="actions">
         <button class="btn" id="copy-link" type="button">Copy link</button>
-        ${state.config.editable && token.get() ? '<button class="btn" id="update-preview" type="button" title="Redraw the image shown when this link is shared">Update preview</button>' : ''}
         ${state.config.editable ? `<a class="btn" href="/edit/${encodeURIComponent(race.id)}">Edit</a>` : ''}
       </div>
     </div>
@@ -392,12 +393,6 @@ async function showRace(id, focusKey, teamArg) {
     if (ev.target.closest('[data-order]')) { state.newestFirst = !state.newestFirst; rerender(); }
 
   };
-  document.getElementById('update-preview')?.addEventListener('click', async (ev) => {
-    ev.target.textContent = 'Drawing…';
-    try { await uploadPreview(race); ev.target.textContent = 'Preview updated'; }
-    catch (e) { ev.target.textContent = `Failed: ${e.message}`; }
-    setTimeout(() => (ev.target.textContent = 'Update preview'), 2000);
-  });
   // Races saved before previews existed get one the first time an admin opens them.
   if (state.config.editable && token.get() && !state.images.previews?.[race.id]) uploadPreview(race).catch(() => {});
   document.getElementById('copy-link').addEventListener('click', async (ev) => {
@@ -998,6 +993,7 @@ async function saveRegistryFromRace(r) {
   }
   for (const [id, color] of state.colorDraft) if (list.has(id)) list.get(id).color = color;
   const next = [...list.values()];
+  refreshPreviews({ drivers: colorChanges(state.registry, next) });
   if (JSON.stringify(next) !== JSON.stringify(state.registry)) {
     state.registry = (await api('drivers', { method: 'PUT', auth: true, body: JSON.stringify({ drivers: next }) })).drivers;
   }
@@ -1009,6 +1005,7 @@ async function saveRegistryFromRace(r) {
   }
   for (const [id, color] of state.teamColorDraft) if (teams.has(id) && color) teams.get(id).color = color;
   const nextTeams = [...teams.values()];
+  refreshPreviews({ teams: colorChanges(state.teams, nextTeams) });
   if (JSON.stringify(nextTeams) !== JSON.stringify(state.teams)) {
     state.teams = normalizeTeams((await api('teams', { method: 'PUT', auth: true, body: JSON.stringify({ teams: nextTeams }) })).teams);
   }
@@ -1109,6 +1106,7 @@ async function showDrivers() {
     onSaved: (res) => {
       // Photo buttons appear once a new driver is on the saved list.
       const before = state.registry.length;
+      refreshPreviews({ drivers: colorChanges(state.registry, res.drivers) });
       state.registry = res.drivers;
       if (res.drivers.length !== before && location.pathname === '/drivers') renderDrivers();
     },
@@ -1221,6 +1219,7 @@ async function showTeams() {
     onSaved: (res) => {
       // Photo buttons appear once a new team is on the saved list.
       const before = state.teams.length;
+      refreshPreviews({ teams: colorChanges(state.teams, res.teams) });
       state.teams = normalizeTeams(res.teams);
       if (res.teams.length !== before && location.pathname === '/teams') renderTeams();
     },
@@ -1527,6 +1526,37 @@ async function uploadPreview(race) {
   state.images.previews = { ...(state.images.previews || {}), [race.id]: (await res.json()).version };
   return true;
 }
+
+/**
+ * Redraws the preview cards of every race a change touches (a driver's or team's photo or color), a moment after
+ * the change, so cards already shared stay current. Batches quick successive changes into one pass.
+ */
+const previewQueue = { drivers: new Set(), teams: new Set(), races: new Set() };
+let previewTimer;
+function refreshPreviews({ drivers = [], teams = [], races = [] } = {}) {
+  if (!state.config.editable || !token.get()) return;
+  drivers.forEach((n) => previewQueue.drivers.add(driverId(n)));
+  teams.forEach((n) => previewQueue.teams.add(driverId(n)));
+  races.forEach((id) => previewQueue.races.add(id));
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(flushPreviews, 1500);
+}
+async function flushPreviews() {
+  const q = { drivers: new Set(previewQueue.drivers), teams: new Set(previewQueue.teams), races: new Set(previewQueue.races) };
+  Object.values(previewQueue).forEach((set) => set.clear());
+  const summaries = await api('races').catch(() => []);
+  for (const r of summaries) {
+    const hit = q.races.has(r.id) || (r.lineups || []).some((l) => q.teams.has(driverId(l.team)) || l.drivers.some((d) => q.drivers.has(driverId(d))));
+    if (!hit) continue;
+    try { await uploadPreview(await api(`races/${encodeURIComponent(r.id)}`)); } catch { /* best effort: the next change retries */ }
+  }
+}
+/** Names whose color differs between two saved lists (including names that were added or removed). */
+const colorChanges = (before, after) => {
+  const was = new Map(before.map((x) => [driverId(x.name), x.color || '']));
+  const now = new Map(after.map((x) => [driverId(x.name), x.color || '']));
+  return [...new Set([...was.keys(), ...now.keys()])].filter((id) => was.get(id) !== now.get(id));
+};
 
 // ---------- boot ----------
 api('config').then((c) => (state.config = c)).catch(() => {}).finally(route);
