@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>karting-hub</Name>
+  <Repository>ghcr.io/cobredev/karting-hub:latest</Repository>
+  <Registry>https://github.com/CobreDev/Karting-Hub/pkgs/container/karting-hub</Registry>
+  <Support>https://github.com/CobreDev/Karting-Hub/issues</Support>
+  <Project>https://github.com/CobreDev/Karting-Hub</Project>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Overview>Shareable karting lap-time dashboard built from Race Monitor exports.</Overview>
+  <Category>Tools:</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <Config Name="Web port" Target="8080" Default="8080" Mode="tcp" Description="Dashboard port" Type="Port" Display="always" Required="true">8080</Config>
+  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/karting-hub" Mode="rw" Description="Where races are saved. Keep this mapped so races survive restarts and updates. Must be writable by 99:100 (nobody:users)." Type="Path" Display="always" Required="true">/mnt/user/appdata/karting-hub</Config>
+  <Config Name="Admin token" Target="ADMIN_TOKEN" Default="" Mode="" Description="Password for uploading/editing races. Leave empty for read-only." Type="Variable" Display="always" Required="false" Mask="true"></Config>
+</Container>

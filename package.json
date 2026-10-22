@@ -1,0 +1,19 @@
+{
+  "name": "karting-hub",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shareable karting lap-time dashboard built from Race Monitor exports",
+  "scripts": {
+    "start": "node server.js",
+    "import": "node scripts/import.mjs",
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CobreDev/Karting-Hub"
+  }
+}
