@@ -717,8 +717,9 @@ function editorTeamColor(k, ki) {
 
 /** For a known team, offer its roster as one-click driver rows. */
 function rosterHint(k, ki) {
-  const team = k.team && savedTeam(k.team);
-  if (!team?.members.length) return '';
+  // A kart without a team name has no roster to offer (an empty name must not be treated as a team).
+  const team = k.team ? savedTeam(k.team) : null;
+  if (!team?.members?.length) return '';
   const have = new Set(k.stints.map((s) => driverId(s.driver)));
   const missing = team.members.filter((m) => !have.has(driverId(m.driver)));
   if (!missing.length) return '';
