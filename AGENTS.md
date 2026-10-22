@@ -12,7 +12,7 @@ that runs on an Unraid server.
 ## Commands
 
 ```bash
-npm test                    # node --test test/ — run after every change
+npm test                    # node --test test/*.test.js — run after every change
 ADMIN_TOKEN=dev npm start   # dev server on http://localhost:8080 (token "dev")
 node --check public/app.js  # quick syntax check (the UI has no build step)
 node scripts/import.mjs ... # rebuild a race JSON from .txt exports (see README)
