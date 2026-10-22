@@ -38,6 +38,12 @@ docker build -t karting-hub .
   over `kart.color`.
 - **Drivers are referenced by name.** Stints store the name; personal colors live in `DATA_DIR/drivers.json`
   and are matched with `driverId()` (trimmed, lowercased). Don't copy colors into race files.
+- **Routes are real paths** (`/r/:id`, not `#/r/:id`) so the server can put Open Graph tags in the page
+  (`serveIndex` / `previewMeta`). Navigate with `navigate(path)`; `<a href="/…">` links are intercepted. Old `#/`
+  links are redirected on load.
+- **Preview cards are drawn in the browser** (`drawPreviewCard`, canvas 1200×630 PNG) and uploaded as
+  `images/previews/<race id>` on race save, on **Update preview**, or the first time an admin opens a race without
+  one. Facts come from `raceSummary()`, shared with the server's `og:description`.
 - **Photos are resized in the browser** (`resizeImage`, 256×256 square). The server never decodes images:
   it checks magic bytes (`imageType`) and size, and stores the bytes. Keep it that way; no image libraries.
   Photos are keyed by `imageId(name)`, the same name-based identity as driver colors.
@@ -57,9 +63,9 @@ docker build -t karting-hub .
 | --- | --- |
 | `docker-entrypoint.sh` | Starts as root (so hooks like Unraid's Tailscale integration can run), chowns `DATA_DIR` to `PUID:PGID` (default 99:100), then `su-exec`s the app. Without root it just runs the command. |
 | `server.js` | `node:http` server. Static files from `public/` with an SPA fallback, and a JSON API that reads/writes `DATA_DIR/races/<id>.json` (atomic tmp+rename). PUT/DELETE need `Authorization: Bearer $ADMIN_TOKEN` (constant-time compare). Creates an empty `drivers.json` / `teams.json` on first start; there is no bundled data. |
-| `public/app.js` | The whole UI. Hash routes: `#/` (race list), `#/r/:id` (dashboard), `#/r/:id/:driverKey` (highlight a driver),
-`#/r/:id/team/:kart` (open a team's lap list), `#/edit/:id`, `#/new`, `#/drivers` (driver list, colors,
-photos), `#/teams` (team list, colors, photos, rosters). The dashboard is rebuilt with `innerHTML` on each route change; clicks go through one delegated `app.onclick`. |
+| `public/app.js` | The whole UI. Path routes: `/` (race list), `/r/:id` (dashboard), `/r/:id/:driverKey` (highlight a driver),
+`/r/:id/team/:kart` (open a team's lap list), `/edit/:id`, `/new`, `/drivers` (driver list, colors,
+photos), `/teams` (team list, colors, photos, rosters). The dashboard is rebuilt with `innerHTML` on each route change; clicks go through one delegated `app.onclick`. |
 | `public/lib/race.js` | `parseRaceMonitor`, `mergeLaps`, `missingLaps`, `pitCandidates`, `computeDrivers`, formatters. |
 | `public/lib/images.js` | `imageId`, `imageType` (magic-byte check), `IMAGE_SIZE`, `MAX_IMAGE_BYTES`. Used by the browser and `server.js`. |
 | `public/lib/color.js` | OKLCH helpers. `teamShades(hex, n, mode)` steps a color's lightness, clamped to a readable lightness band per theme. |

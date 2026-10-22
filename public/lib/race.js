@@ -144,6 +144,30 @@ function withStats(e) {
   };
 }
 
+/** "2026-10-17" -> "Sat, Oct 17, 2026" (same in every timezone). */
+export function fmtRaceDate(date) {
+  const d = new Date(`${date}T12:00:00Z`);
+  if (Number.isNaN(+d)) return String(date || '');
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+/**
+ * The headline facts for a race, used by link previews (server) and the preview card image (browser):
+ * date, track, teams in kart order, and the fastest lap with who set it.
+ */
+export function raceSummary(race) {
+  const drivers = computeDrivers(race);
+  const fastest = drivers.reduce((b, d) => (!b || d.best < b.best ? d : b), null);
+  return {
+    name: race.name || 'Race',
+    date: fmtRaceDate(race.date),
+    track: race.track || '',
+    teams: (race.karts || []).map((k) => ({ name: k.team || `Kart #${k.number}`, kart: k.number, team: k.team || '' })),
+    fastest: fastest && { driver: fastest.driver, team: fastest.team, kart: fastest.kart, ms: fastest.best, lap: fastest.bestLapNo },
+    drivers,
+  };
+}
+
 /** 49250 -> "49.250", 61234 -> "1:01.234" */
 export function fmtTime(ms) {
   if (ms == null || Number.isNaN(ms)) return '—';

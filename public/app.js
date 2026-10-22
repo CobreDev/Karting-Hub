@@ -1,6 +1,6 @@
 import {
   parseRaceMonitor, mergeLaps, missingLaps, pitCandidates, computeDrivers,
-  fmtTime, fmtDelta, slugify, quantile, driverId, ROLES, teamListErrors, normalizeTeams, DEFAULT_SLOW_FACTOR,
+  fmtTime, fmtDelta, slugify, quantile, driverId, raceSummary, ROLES, teamListErrors, normalizeTeams, DEFAULT_SLOW_FACTOR,
 } from './lib/race.js';
 import { teamShades, isHex, DEFAULT_TEAM_COLORS } from './lib/color.js';
 import { imageId, IMAGE_SIZE } from './lib/images.js';
@@ -218,8 +218,16 @@ function applyTeamColors(race, drivers) {
 })();
 
 // ---------- routing ----------
+// Real paths (/r/<race>) rather than #/ links, so the server sees the race and can serve link previews.
+function navigate(path, { replace = false } = {}) {
+  history[replace ? 'replaceState' : 'pushState'](null, '', path);
+  route();
+}
+
 async function route() {
-  const parts = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
+  // Old #/ links still work: move them to the matching path.
+  if (location.hash.startsWith('#/')) history.replaceState(null, '', location.hash.slice(1) || '/');
+  const parts = location.pathname.replace(/^\/+/, '').split('/').filter(Boolean).map(decodeURIComponent);
   window.onresize = null;
   app.onclick = null;
   try {
@@ -230,10 +238,18 @@ async function route() {
     if (parts[0] === 'teams') return await showTeams();
     return await showHome();
   } catch (e) {
-    app.innerHTML = `<div class="card"><h2>Something went wrong</h2><p class="muted">${esc(e.message)}</p><a href="#/">Back to races</a></div>`;
+    app.innerHTML = `<div class="card"><h2>Something went wrong</h2><p class="muted">${esc(e.message)}</p><a href="/">Back to races</a></div>`;
   }
 }
-window.addEventListener('hashchange', route);
+window.addEventListener('popstate', route);
+// In-app links navigate without a full page load.
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a[href^="/"]');
+  if (!a || a.target || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  navigate(a.getAttribute('href'));
+  window.scrollTo(0, 0);
+});
 
 // ---------- home ----------
 async function showHome() {
@@ -242,19 +258,19 @@ async function showHome() {
   app.innerHTML = `
     <div class="page-head">
       <div><h1>Races</h1><div class="meta">Lap times and stints from Race Monitor exports</div></div>
-      <div class="actions"><a class="btn" href="#/teams">Teams</a><a class="btn" href="#/drivers">Drivers</a>${state.config.editable ? '<a class="btn primary" href="#/new">+ New race</a>' : ''}</div>
+      <div class="actions"><a class="btn" href="/teams">Teams</a><a class="btn" href="/drivers">Drivers</a>${state.config.editable ? '<a class="btn primary" href="/new">+ New race</a>' : ''}</div>
     </div>
     ${races.length ? `<div class="race-grid">${races.map((r) => `
-      <a class="card race-card" href="#/r/${encodeURIComponent(r.id)}">
+      <a class="card race-card" href="/r/${encodeURIComponent(r.id)}">
         <h2>${esc(r.name)}</h2>
         <div class="secondary">${esc(fmtDate(r.date))}${r.track ? ` · ${esc(r.track)}` : ''}</div>
         <div class="drivers">${r.teams?.length ? esc(r.teams.join(' vs ')) : `${r.karts} kart${r.karts === 1 ? '' : 's'}`}${r.drivers.length ? ` · ${esc(r.drivers.join(', '))}` : ''}</div>
       </a>`).join('')}</div>`
-    : `<div class="card muted">No races yet.${state.config.editable ? ' <a href="#/new">Add one</a>.' : ''}</div>`}`;
+    : `<div class="card muted">No races yet.${state.config.editable ? ' <a href="/new">Add one</a>.' : ''}</div>`}`;
 }
 
 // ---------- race dashboard ----------
-/** `#/r/:id` race; `#/r/:id/:driverKey` highlights a driver; `#/r/:id/team/:kart` opens a team's laps. */
+/** `/r/:id` race; `/r/:id/:driverKey` highlights a driver; `/r/:id/team/:kart` opens a team's laps. */
 async function showRace(id, focusKey, teamArg) {
   const [race] = await Promise.all([api(`races/${encodeURIComponent(id)}`), loadRegistry()]);
   document.title = `${race.name} · Karting Hub`;
@@ -277,13 +293,14 @@ async function showRace(id, focusKey, teamArg) {
   app.innerHTML = `
     <div class="page-head">
       <div>
-        <div><a href="#/">← All races</a></div>
+        <div><a href="/">← All races</a></div>
         <h1 style="margin-top:6px">${esc(race.name)}</h1>
         <div class="meta">${esc(fmtDate(race.date))}${race.track ? ` · ${esc(race.track)}` : ''}</div>
       </div>
       <div class="actions">
         <button class="btn" id="copy-link" type="button">Copy link</button>
-        ${state.config.editable ? `<a class="btn" href="#/edit/${encodeURIComponent(race.id)}">Edit</a>` : ''}
+        ${state.config.editable && token.get() ? '<button class="btn" id="update-preview" type="button" title="Redraw the image shown when this link is shared">Update preview</button>' : ''}
+        ${state.config.editable ? `<a class="btn" href="/edit/${encodeURIComponent(race.id)}">Edit</a>` : ''}
       </div>
     </div>
 
@@ -338,13 +355,21 @@ async function showRace(id, focusKey, teamArg) {
   });
   app.onclick = (ev) => {
     const pick = ev.target.closest('[data-focus]');
-    if (pick) location.hash = `#/r/${encodeURIComponent(race.id)}/${encodeURIComponent(pick.dataset.focus)}`;
+    if (pick) navigate(`/r/${encodeURIComponent(race.id)}/${encodeURIComponent(pick.dataset.focus)}`);
     const rerender = () => (document.getElementById('focus').innerHTML = lapSection(focus, karts, lapKart));
     const team = ev.target.closest('[data-team]');
-    if (team) location.hash = `#/r/${encodeURIComponent(race.id)}/team/${encodeURIComponent(team.dataset.team)}`;
+    if (team) navigate(`/r/${encodeURIComponent(race.id)}/team/${encodeURIComponent(team.dataset.team)}`);
     if (ev.target.closest('[data-order]')) { state.newestFirst = !state.newestFirst; rerender(); }
 
   };
+  document.getElementById('update-preview')?.addEventListener('click', async (ev) => {
+    ev.target.textContent = 'Drawing…';
+    try { await uploadPreview(race); ev.target.textContent = 'Preview updated'; }
+    catch (e) { ev.target.textContent = `Failed: ${e.message}`; }
+    setTimeout(() => (ev.target.textContent = 'Update preview'), 2000);
+  });
+  // Races saved before previews existed get one the first time an admin opens them.
+  if (state.config.editable && token.get() && !state.images.previews?.[race.id]) uploadPreview(race).catch(() => {});
   document.getElementById('copy-link').addEventListener('click', async (ev) => {
     try { await navigator.clipboard.writeText(location.href); ev.target.textContent = 'Copied!'; }
     catch { prompt('Copy this link:', location.href); }
@@ -598,7 +623,7 @@ function lapChart(el, karts, focus) {
 // ---------- editor ----------
 async function showEditor(id) {
   if (!state.config.editable) {
-    app.innerHTML = '<div class="card"><h2>Editing is disabled</h2><p class="muted">Set the <code>ADMIN_TOKEN</code> environment variable on the server to enable uploads.</p><a href="#/">Back</a></div>';
+    app.innerHTML = '<div class="card"><h2>Editing is disabled</h2><p class="muted">Set the <code>ADMIN_TOKEN</code> environment variable on the server to enable uploads.</p><a href="/">Back</a></div>';
     return;
   }
   state.edit = id ? await api(`races/${encodeURIComponent(id)}`) : {
@@ -618,7 +643,7 @@ function renderEditor(message) {
   const r = state.edit;
   app.innerHTML = `
     <div class="page-head">
-      <div><div><a href="${state.isNew ? '#/' : `#/r/${encodeURIComponent(r.id)}`}">← Back</a></div>
+      <div><div><a href="${state.isNew ? '/' : `/r/${encodeURIComponent(r.id)}`}">← Back</a></div>
         <h1 style="margin-top:6px">${state.isNew ? 'New race' : 'Edit race'}</h1></div>
       ${state.isNew ? '' : '<div class="actions"><button class="btn danger" id="delete" type="button">Delete race</button></div>'}
     </div>
@@ -906,7 +931,7 @@ function bindEditor() {
   document.getElementById('delete')?.addEventListener('click', async () => {
     if (!confirm(`Delete "${r.name}" permanently?`)) return;
     token.set(document.getElementById('token').value.trim());
-    try { await api(`races/${encodeURIComponent(r.id)}`, { method: 'DELETE', auth: true }); location.hash = '#/'; }
+    try { await api(`races/${encodeURIComponent(r.id)}`, { method: 'DELETE', auth: true }); navigate('/'); }
     catch (e) { document.getElementById('save-msg').textContent = e.message; }
   });
 }
@@ -926,7 +951,8 @@ async function saveRace() {
     }
     await api(`races/${encodeURIComponent(r.id)}`, { method: 'PUT', auth: true, body: JSON.stringify(r) });
     await saveRegistryFromRace(r);
-    location.hash = `#/r/${encodeURIComponent(r.id)}`;
+    await uploadPreview(r).catch(() => {}); // a failed preview shouldn't block saving the race
+    navigate(`/r/${encodeURIComponent(r.id)}`);
   } catch (e) {
     msg.textContent = e.message;
     msg.className = 'notice error';
@@ -1003,7 +1029,7 @@ function driverTeams(name) {
   const rows = state.teams.flatMap((t) => t.members.filter((m) => driverId(m.driver) === driverId(name)).map((m) => ({ t, m })))
     .sort((a, b) => Number(ROLES[b.m.role].bound) - Number(ROLES[a.m.role].bound));
   return rows.length
-    ? `<div class="members">${rows.map(({ t, m }) => `<a class="member" href="#/teams">${avatar('teams', t.name, 18, t.color || 'var(--border)', `<span class="swatch" style="background:${t.color || 'var(--border)'}"></span>`)}${esc(t.name)} ${roleBadge(m.role)}</a>`).join('')}</div>`
+    ? `<div class="members">${rows.map(({ t, m }) => `<a class="member" href="/teams">${avatar('teams', t.name, 18, t.color || 'var(--border)', `<span class="swatch" style="background:${t.color || 'var(--border)'}"></span>`)}${esc(t.name)} ${roleBadge(m.role)}</a>`).join('')}</div>`
     : '<span class="muted">—</span>';
 }
 
@@ -1023,7 +1049,7 @@ function driverTeamEditor(name) {
     ${others.length ? `<select class="add-team" data-dt-add="${esc(name)}" aria-label="Add ${esc(name)} to a team">
       <option value="">+ Add to team…</option>
       ${others.map((t) => `<option value="${esc(t.name)}">${esc(t.name)}</option>`).join('')}
-    </select>` : state.teams.length ? '' : '<a class="muted" href="#/teams" style="font-size:13px">Add teams first</a>'}
+    </select>` : state.teams.length ? '' : '<a class="muted" href="/teams" style="font-size:13px">Add teams first</a>'}
   </div>`;
 }
 
@@ -1054,7 +1080,7 @@ async function showDrivers() {
       // Photo buttons appear once a new driver is on the saved list.
       const before = state.registry.length;
       state.registry = res.drivers;
-      if (res.drivers.length !== before && location.hash === '#/drivers') renderDrivers();
+      if (res.drivers.length !== before && location.pathname === '/drivers') renderDrivers();
     },
     status: (kind, text) => { state.driverSave = { kind, text }; showSaveStatus(kind, text); },
   });
@@ -1066,7 +1092,7 @@ function renderDrivers(message) {
   const racesFor = (name) => state.driverRaces.filter((r) => r.drivers.some((n) => driverId(n) === driverId(name)));
   app.innerHTML = `
     <div class="page-head">
-      <div><div><a href="#/">← All races</a></div><h1 style="margin-top:6px">Drivers</h1>
+      <div><div><a href="/">← All races</a></div><h1 style="margin-top:6px">Drivers</h1>
         <div class="meta">Personal colors apply in every race, whichever team the driver is on.</div></div>
     </div>
     <section class="card section">
@@ -1085,7 +1111,7 @@ function renderDrivers(message) {
             ? `<span class="driver-color ${d.color ? '' : 'unset'}"><input type="color" data-reg="${i}" value="${d.color || '#8e8d86'}" aria-label="Color for ${esc(d.name)}">${d.color ? `<button class="btn small clear-color" type="button" data-reg-clear="${i}" aria-label="Remove color">✕</button>` : ''}</span>`
             : d.color ? `<span class="swatch" style="background:${d.color};width:16px;height:16px"></span>` : '<span class="muted">team</span>'}</td>
           <td class="${edit ? 'team-cell' : 'hide-sm'}">${edit && saved ? driverTeamEditor(d.name) : driverTeams(d.name)}</td>
-          <td class="secondary hide-sm">${rs.length ? rs.map((r) => `<a href="#/r/${encodeURIComponent(r.id)}">${esc(r.name)}</a>`).join(', ') : '<span class="muted">—</span>'}</td>
+          <td class="secondary hide-sm">${rs.length ? rs.map((r) => `<a href="/r/${encodeURIComponent(r.id)}">${esc(r.name)}</a>`).join(', ') : '<span class="muted">—</span>'}</td>
           ${edit ? `<td class="actions-cell"><div class="row-actions">${saved ? photoButtons('drivers', d.name) : '<span class="muted" style="font-size:12px">not saved yet</span>'}
             <button class="btn small danger" type="button" data-reg-remove="${i}">Remove</button></div></td>` : ''}
         </tr>`;
@@ -1166,7 +1192,7 @@ async function showTeams() {
       // Photo buttons appear once a new team is on the saved list.
       const before = state.teams.length;
       state.teams = normalizeTeams(res.teams);
-      if (res.teams.length !== before && location.hash === '#/teams') renderTeams();
+      if (res.teams.length !== before && location.pathname === '/teams') renderTeams();
     },
     status: (kind, text) => { state.teamSave = { kind, text }; showSaveStatus(kind, text); },
   });
@@ -1196,7 +1222,7 @@ function renderTeams(message) {
   const order = { owner: 0, core: 1, rotating: 2 };
   app.innerHTML = `
     <div class="page-head">
-      <div><div><a href="#/">← All races</a></div><h1 style="margin-top:6px">Teams</h1>
+      <div><div><a href="/">← All races</a></div><h1 style="margin-top:6px">Teams</h1>
         <div class="meta">Team colors and photos apply in every race. Owner and core drivers are tied to one team; rotating drivers can race for others.</div></div>
     </div>
     <section class="card section">
@@ -1216,7 +1242,7 @@ function renderTeams(message) {
               ? `<span class="driver-color ${t.color ? '' : 'unset'}"><input type="color" data-team-color="${i}" value="${t.color || '#8e8d86'}" aria-label="Color for ${esc(t.name)}"></span>`
               : t.color ? `<span class="swatch" style="background:${t.color};width:16px;height:16px"></span>` : '<span class="muted">—</span>'}</td>
             <td class="roster-cell"><div class="members">${members.map(memberChip).join('') || '<span class="muted">No roster yet</span>'}</div></td>
-            <td class="secondary hide-sm">${rs.length ? rs.map((r) => `<a href="#/r/${encodeURIComponent(r.id)}">${esc(r.name)}</a>`).join(', ') : '<span class="muted">—</span>'}</td>
+            <td class="secondary hide-sm">${rs.length ? rs.map((r) => `<a href="/r/${encodeURIComponent(r.id)}">${esc(r.name)}</a>`).join(', ') : '<span class="muted">—</span>'}</td>
             ${edit ? `<td class="actions-cell"><div class="row-actions">
               <button class="btn small" type="button" data-team-open="${i}" aria-expanded="${open}">${open ? 'Done' : 'Edit roster'}</button>
               ${saved ? photoButtons('teams', t.name) : '<span class="muted" style="font-size:12px">not saved yet</span>'}
@@ -1260,8 +1286,8 @@ function rosterEditor(t, i) {
       ${roleSelect(`id="member-role-${i}" aria-label="Role"`, 'core')}
       <button class="btn small" type="button" data-member-add="${i}">Add to roster</button>
     </div>` : `<p class="muted">${state.registry.length
-      ? 'Everyone on the <a href="#/drivers">Drivers page</a> is already on this roster.'
-      : 'Add drivers on the <a href="#/drivers">Drivers page</a> first, then pick them here.'}</p>`}
+      ? 'Everyone on the <a href="/drivers">Drivers page</a> is already on this roster.'
+      : 'Add drivers on the <a href="/drivers">Drivers page</a> first, then pick them here.'}</p>`}
     ${history.length ? `<div class="suggest">Raced for ${esc(t.name)}: ${history.map((d) => `<button class="btn small" type="button" data-member-quick="${i}" data-driver="${esc(d)}">+ ${esc(d)}</button>`).join('')}</div>` : ''}
   </div>`;
 }
@@ -1330,6 +1356,146 @@ function bindTeams() {
   document.getElementById('new-team').addEventListener('keydown', (e) => e.key === 'Enter' && addTeam());
   // Entering the token retries a save that was waiting for it.
   document.getElementById('token').addEventListener('change', (e) => { token.set(e.target.value.trim()); if (state.teamSave?.kind === 'error') state.saveTeams(); });
+}
+
+// ---------- link preview card (iMessage etc.) ----------
+// Drawn here on a canvas because the server has no image library; uploaded as /images/previews/<race id>.
+const loadImg = async (url) => {
+  if (!url) return null;
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    return img;
+  } catch {
+    return null;
+  }
+};
+
+async function drawPreviewCard(race) {
+  const sum = raceSummary(race);
+  const W = 1200, H = 630, PAD = 64, STRIP = 60;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const font = (weight, size) => `${weight} ${size}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
+  const darkColor = (hex) => teamShades(hex, 1, 'dark')[0];
+  const initialsOf = (name) => String(name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const fit = (text, max) => {
+    if (ctx.measureText(text).width <= max) return text;
+    while (text.length > 1 && ctx.measureText(`${text}…`).width > max) text = text.slice(0, -1);
+    return `${text}…`;
+  };
+  // Round photo with a colored ring, or a colored disc with initials.
+  const disc = (img, x, y, r, color, label) => {
+    ctx.save();
+    ctx.beginPath(); ctx.arc(x, y, r + 4, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.closePath();
+    if (img) { ctx.clip(); ctx.drawImage(img, x - r, y - r, r * 2, r * 2); }
+    else {
+      ctx.fillStyle = '#242422'; ctx.fill();
+      ctx.fillStyle = '#f0efec'; ctx.font = font(700, r * 0.8); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(initialsOf(label), x, y + 1);
+    }
+    ctx.restore();
+  };
+
+  // Background and checkered strip.
+  ctx.fillStyle = '#111110'; ctx.fillRect(0, 0, W, H);
+  const sq = 30;
+  for (let y = 0; y < H; y += sq) for (let c = 0; c < 2; c++) {
+    if ((y / sq + c) % 2 === 0) { ctx.fillStyle = '#f0efec'; ctx.fillRect(W - STRIP + c * sq, y, sq, sq); }
+  }
+  const maxW = W - STRIP - PAD * 2;
+
+  // Brand line.
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if ((i + j) % 2 === 0) { ctx.fillStyle = '#f0efec'; ctx.fillRect(PAD + i * 7, 48 + j * 7, 7, 7); }
+  ctx.fillStyle = '#8e8d86'; ctx.font = font(700, 22); ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+  ctx.fillText('KARTING HUB', PAD + 42, 70);
+
+  // Race name (up to two lines) and date · track.
+  ctx.fillStyle = '#f0efec'; ctx.font = font(800, 62);
+  const words = sum.name.split(/\s+/);
+  const lines = [''];
+  for (const w of words) {
+    const next = lines[lines.length - 1] ? `${lines[lines.length - 1]} ${w}` : w;
+    if (ctx.measureText(next).width > maxW && lines[lines.length - 1]) lines.push(w); else lines[lines.length - 1] = next;
+  }
+  const shown = lines.slice(0, 2);
+  if (lines.length > 2) shown[1] = fit(`${shown[1]} ${lines.slice(2).join(' ')}`, maxW);
+  let y = 150;
+  for (const l of shown) { ctx.fillText(l, PAD, y); y += 70; }
+  ctx.fillStyle = '#c3c2b7'; ctx.font = font(500, 30);
+  ctx.fillText(fit([sum.date, sum.track].filter(Boolean).join('  ·  '), maxW), PAD, y - 12);
+
+  // Teams.
+  const karts = race.karts || [];
+  let tx = PAD;
+  const ty = y + 58;
+  const teamImgs = await Promise.all(karts.map((k) => loadImg(k.team && photoUrl('teams', k.team))));
+  ctx.font = font(650, 28);
+  karts.slice(0, 4).forEach((k, i) => {
+    const color = darkColor(teamColor(k, i));
+    ctx.font = font(650, 28);
+    const name = fit(k.team || `Kart #${k.number}`, 300);
+    const nameW = ctx.measureText(name).width;
+    ctx.font = font(500, 24);
+    const num = k.team ? `#${k.number}` : '';
+    const w = 54 + nameW + (num ? 10 + ctx.measureText(num).width : 0);
+    if (tx + w > W - STRIP - PAD) return; // more teams than fit: the rest are left off the card
+    disc(teamImgs[i], tx + 22, ty - 9, 20, color, name);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#f0efec'; ctx.font = font(650, 28); ctx.fillText(name, tx + 54, ty);
+    if (num) { ctx.fillStyle = '#8e8d86'; ctx.font = font(500, 24); ctx.fillText(num, tx + 64 + nameW, ty); }
+    tx += w + 36;
+  });
+
+  // Race stats under the teams.
+  const lapCount = karts.reduce((n, k) => n + k.laps.length, 0);
+  const longest = Math.max(0, ...karts.map((k) => k.laps.reduce((a, l) => a + l.ms, 0)));
+  const hrs = longest / 3600000;
+  // 1:59:01 of laps reads as "2 h"; 1:30 as "1.5 h"; short races in minutes.
+  const hours = hrs < 1 ? `${Math.round(longest / 60000)} min` : Math.abs(hrs - Math.round(hrs)) < 0.1 ? `${Math.round(hrs)} h` : `${hrs.toFixed(1)} h`;
+  ctx.fillStyle = '#8e8d86'; ctx.font = font(500, 24); ctx.textAlign = 'left';
+  ctx.fillText(`${karts.length} kart${karts.length === 1 ? '' : 's'}  ·  ${sum.drivers.length} driver${sum.drivers.length === 1 ? '' : 's'}  ·  ${lapCount} laps  ·  ${hours}`, PAD, ty + 62);
+
+  // Fastest lap panel.
+  if (sum.fastest) {
+    const f = sum.fastest;
+    const ki = karts.findIndex((k) => k.number === f.kart);
+    const tColor = darkColor(teamColor(karts[ki] || {}, Math.max(0, ki)));
+    const own = ownColors().get(driverId(f.driver));
+    const dColor = own ? darkColor(own) : tColor;
+    const bx = PAD, by = 438, bw = maxW, bh = 132;
+    ctx.fillStyle = '#1c1c1b';
+    ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 18); ctx.fill();
+    ctx.fillStyle = tColor; ctx.beginPath(); ctx.roundRect(bx, by, 10, bh, [18, 0, 0, 18]); ctx.fill();
+    const dImg = await loadImg(photoUrl('drivers', f.driver));
+    disc(dImg, bx + 92, by + bh / 2, 46, dColor, f.driver);
+    if (own) { ctx.beginPath(); ctx.arc(bx + 92, by + bh / 2, 54, Math.PI * 0.75, Math.PI * 1.75); ctx.strokeStyle = tColor; ctx.lineWidth = 4; ctx.stroke(); }
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#8e8d86'; ctx.font = font(700, 20); ctx.fillText('FASTEST LAP', bx + 170, by + 42);
+    ctx.fillStyle = '#f0efec'; ctx.font = font(800, 64); ctx.fillText(fmtTime(f.ms), bx + 166, by + 108);
+    const tw = ctx.measureText(fmtTime(f.ms)).width;
+    ctx.font = font(700, 34); ctx.fillStyle = '#f0efec';
+    ctx.fillText(fit(f.driver, bw - tw - 230), bx + 196 + tw, by + 74);
+    ctx.font = font(500, 26); ctx.fillStyle = '#c3c2b7';
+    ctx.fillText(fit(`${f.team || `Kart #${f.kart}`} · lap ${f.lap}`, bw - tw - 230), bx + 196 + tw, by + 110);
+  }
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+}
+
+/** Draws and uploads the race's preview card. Needs the admin token; quietly does nothing without one. */
+async function uploadPreview(race) {
+  if (!token.get() || !race?.id) return false;
+  const blob = await drawPreviewCard(race);
+  const res = await fetch(`/api/images/previews/${encodeURIComponent(race.id)}`, {
+    method: 'PUT', body: blob, headers: { 'Content-Type': 'image/png', Authorization: `Bearer ${token.get()}` },
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+  state.images.previews = { ...(state.images.previews || {}), [race.id]: (await res.json()).version };
+  return true;
 }
 
 // ---------- boot ----------

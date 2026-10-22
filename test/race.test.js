@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  parseLapTime, parseRaceMonitor, mergeLaps, missingLaps, computeDrivers, fmtTime, fmtDelta, driverId, teamListErrors, normalizeTeams,
+  parseLapTime, parseRaceMonitor, mergeLaps, missingLaps, computeDrivers, fmtTime, fmtDelta, driverId, teamListErrors, normalizeTeams, raceSummary, fmtRaceDate,
 } from '../public/lib/race.js';
 import { teamShades } from '../public/lib/color.js';
 import { imageType, imageId } from '../public/lib/images.js';
@@ -126,4 +126,20 @@ test('normalizeTeams fills in missing members/color and drops nameless entries',
     { name: 'Team Blue', color: '#2a78d6', members: [{ driver: 'Alex', role: 'owner' }] },
   ]);
   assert.deepEqual(normalizeTeams(undefined), []);
+});
+
+test('raceSummary gives the facts for link previews', () => {
+  const laps = (base) => Array.from({ length: 5 }, (_, i) => ({ lap: i + 1, ms: base + i * 100 }));
+  const race = {
+    name: 'Saturday Enduro', date: '2026-03-14', track: 'My Track',
+    karts: [
+      { number: '7', team: 'Team Apex', laps: laps(50000), stints: [{ driver: 'Alex', toLap: null }] },
+      { number: '12', team: '', laps: laps(49000), stints: [{ driver: 'Sam', toLap: null }] },
+    ],
+  };
+  const s = raceSummary(race);
+  assert.equal(s.date, 'Sat, Mar 14, 2026');
+  assert.deepEqual(s.teams.map((t) => t.name), ['Team Apex', 'Kart #12']);
+  assert.deepEqual({ driver: s.fastest.driver, ms: s.fastest.ms, kart: s.fastest.kart }, { driver: 'Sam', ms: 49000, kart: '12' });
+  assert.equal(fmtRaceDate('not a date'), 'not a date');
 });

@@ -1,7 +1,8 @@
 // Profile pictures for drivers and teams. Shared by the browser (resizing, URLs) and the server (validation).
 import { slugify } from './race.js';
 
-export const IMAGE_KINDS = ['drivers', 'teams'];
+// previews = the race link-preview card (1200x630 PNG), keyed by race id.
+export const IMAGE_KINDS = ['drivers', 'teams', 'previews'];
 /** Output size of the square crop. 256px covers 2x displays at the largest size we show (~96px). */
 export const IMAGE_SIZE = 256;
 /** Upload ceiling. A 256x256 WebP/JPEG is ~10-40 KB, so this only stops raw photos that skipped resizing. */

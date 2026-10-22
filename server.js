@@ -3,7 +3,7 @@ import http from 'node:http';
 import { readFile, writeFile, readdir, rename, unlink, mkdir, access, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { IMAGE_KINDS, MAX_IMAGE_BYTES, imageType } from './public/lib/images.js';
-import { teamListErrors, normalizeTeams } from './public/lib/race.js';
+import { teamListErrors, normalizeTeams, raceSummary, fmtTime } from './public/lib/race.js';
 import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +17,8 @@ const DRIVERS = path.join(DATA_DIR, 'drivers.json');
 const TEAMS = path.join(DATA_DIR, 'teams.json');
 const IMAGES = path.join(DATA_DIR, 'images');
 const TOKEN = process.env.ADMIN_TOKEN || '';
+// Public address used in link previews (e.g. https://karting.example.ts.net). Guessed from the request if unset.
+const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
 const MAX_BODY = 5 * 1024 * 1024;
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,79}$/;
 
@@ -218,6 +220,7 @@ async function api(req, res, parts) {
   }
   if (req.method === 'DELETE') {
     await unlink(raceFile(id)).catch(() => {});
+    await unlink(imageFile('previews', id)).catch(() => {});
     return send(res, 200, { ok: true });
   }
   return send(res, 405, { error: 'method not allowed' });
@@ -279,17 +282,84 @@ async function serveImage(req, res, kind, id, query) {
   res.end(req.method === 'HEAD' ? undefined : data);
 }
 
+// ---------- link previews (iMessage, Slack, Discord…) ----------
+const escAttr = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+function baseUrl(req) {
+  if (PUBLIC_URL) return PUBLIC_URL;
+  const host = req.headers['x-forwarded-host'] || req.headers.host || `localhost:${PORT}`;
+  const proto = req.headers['x-forwarded-proto'] || (/\.ts\.net$|\.(com|net|org|dev|app|io)$/.test(host.split(':')[0]) ? 'https' : 'http');
+  return `${proto}://${host}`;
+}
+
+async function imageVersion(kind, id) {
+  try {
+    return Math.round((await stat(imageFile(kind, id))).mtimeMs);
+  } catch {
+    return null;
+  }
+}
+
+/** Open Graph tags for a page. Race pages describe the race; driver links describe that driver's stint. */
+async function previewMeta(req, pathname) {
+  const base = baseUrl(req);
+  const meta = {
+    title: 'Karting Hub',
+    description: 'Lap times, stints and teams from our endurance kart races.',
+    image: `${base}/og-default.png`,
+    url: `${base}${pathname}`,
+    large: false,
+  };
+  const [, kind, id, focus] = pathname.split('/').map((p) => decodeURIComponent(p || ''));
+  if (kind !== 'r' || !ID_RE.test(id || '')) return meta;
+  let race;
+  try {
+    race = JSON.parse(await readFile(raceFile(id), 'utf8'));
+  } catch {
+    return meta;
+  }
+  const sum = raceSummary(race);
+  const where = [sum.date, sum.track].filter(Boolean).join(' · ');
+  const teams = sum.teams.map((t) => t.name).join(' vs ');
+  const fast = sum.fastest ? `Fastest lap ${fmtTime(sum.fastest.ms)} by ${sum.fastest.driver}${sum.fastest.team ? ` (${sum.fastest.team})` : ''}` : '';
+  meta.title = sum.name;
+  meta.description = [where, teams, fast].filter(Boolean).join('\n');
+  const d = focus && focus !== 'team' && sum.drivers.find((x) => x.key === focus);
+  if (d) {
+    meta.title = `${d.driver} · ${sum.name}`;
+    meta.description = [`Best ${fmtTime(d.best)} · avg ${fmtTime(d.avg)} · ${d.count} laps${d.team ? ` for ${d.team}` : ''}`, where].join('\n');
+  }
+  const v = await imageVersion('previews', id);
+  if (v) Object.assign(meta, { image: `${base}/images/previews/${id}?v=${v}`, large: true });
+  return meta;
+}
+
+async function serveIndex(req, res, pathname) {
+  const html = await readFile(path.join(PUBLIC, 'index.html'), 'utf8');
+  const m = await previewMeta(req, pathname);
+  const tags = [
+    ['og:site_name', 'Karting Hub'], ['og:type', 'website'], ['og:title', m.title], ['og:description', m.description],
+    ['og:url', m.url], ['og:image', m.image],
+    ...(m.large ? [['og:image:width', '1200'], ['og:image:height', '630'], ['og:image:type', 'image/png']] : []),
+  ].map(([k, v]) => `<meta property="${k}" content="${escAttr(v)}">`);
+  tags.push(`<meta name="twitter:card" content="${m.large ? 'summary_large_image' : 'summary'}">`, `<meta name="description" content="${escAttr(m.description)}">`);
+  const out = html
+    .replace('<title>Karting Hub</title>', `<title>${escAttr(m.title)}</title>\n  ${tags.join('\n  ')}`);
+  res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache' });
+  res.end(req.method === 'HEAD' ? undefined : out);
+}
+
 async function serveStatic(req, res, pathname) {
   const rel = path.normalize(decodeURIComponent(pathname)).replace(/^(\.\.[/\\])+/, '');
   let file = path.join(PUBLIC, rel);
   if (!file.startsWith(PUBLIC)) return send(res, 403, 'forbidden');
   try {
+    if (pathname === '/index.html') return await serveIndex(req, res, '/');
     let data;
     try {
       data = await readFile(file);
     } catch {
-      file = path.join(PUBLIC, 'index.html'); // SPA fallback
-      data = await readFile(file);
+      return await serveIndex(req, res, pathname); // SPA fallback: any app route gets the page plus preview tags
     }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     res.end(req.method === 'HEAD' ? undefined : data);

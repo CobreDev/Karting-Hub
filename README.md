@@ -17,7 +17,10 @@ consistency, and every lap of the race.
   every change automatically.
 - **Driver list with personal colors and photos**: drivers are saved once and reused across races and teams.
   Teams can have a photo too. Photos are cropped square and shrunk to 256×256 in the browser before upload.
-- **Per-driver links** (`#/r/<race>/<driver>|<kart>`) jump straight to that driver's laps.
+- **Per-driver links** (`/r/<race>/<driver>|<kart>`) jump straight to that driver's laps.
+- **Link previews** for iMessage, Slack, Discord and others: race links show a card with the teams, fastest lap
+  and driver, date and track. The card is drawn when you save a race (or **Update preview** on the race page);
+  set `PUBLIC_URL` so previews use your public address.
 - **Editor**: drop in Race Monitor files, merge split sessions, set teams, colors and driver changes.
 - Light and dark mode, works on phones, zero dependencies.
 
@@ -40,6 +43,7 @@ Open http://localhost:8080. Viewing is open to anyone with the URL; **+ New race
 | `ADMIN_TOKEN` | *(empty)* | Password for uploads and edits. Empty = read-only dashboard. |
 | `PORT` | `8080` | HTTP port inside the container. |
 | `DATA_DIR` | `/data` | Where races are stored (`/data/races/*.json`). Mount a volume here. |
+| `PUBLIC_URL` | *(guessed)* | The address friends use, e.g. `https://karting-hub.your-tailnet.ts.net`. Used in link previews. |
 | `PUID` / `PGID` | `99` / `100` | User and group the app runs as, and owns `/data` with (Unraid's `nobody:users`). |
 
 ### Your data
