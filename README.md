@@ -67,9 +67,10 @@ to `/mnt/user/appdata/karting-hub`.
 2. Drop in every Race Monitor `.txt` file. Upload both files for a kart when the race was split over two timing
    sessions; they're merged by lap number. Check the **Kart #** column before clicking **Add to race**: it
    comes from the file name (`7 2.txt` → 7) because the header sometimes shows a different transponder.
-3. For each kart, set the team name and color, then list the drivers in order with the last lap each one
-   drove (leave the last driver blank = to the finish). Driver names autocomplete from the saved driver list,
-   and the color box next to a name sets that driver's personal color for every race (optional). The "likely pit laps" buttons add a driver change
+3. For each kart, pick the team and then the drivers in order, with the last lap each one drove (leave the last
+   driver blank = to the finish). Both are dropdowns of the teams and drivers you've added; the team's roster
+   is listed first, and **+ New team…** / **+ New driver…** add one without leaving the race. The color box
+   next to a driver sets their personal color for every race (optional). The "likely pit laps" buttons add a driver change
    after that lap.
 4. **Save race**.
 

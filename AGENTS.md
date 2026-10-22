@@ -26,6 +26,10 @@ docker build -t karting-hub .
   without the owner asking. `package.json` has no `dependencies`, and the Dockerfile relies on that.
 - **`public/lib/*.js` is shared** between the browser, the CLI importer and the tests. Keep it free of DOM and
   Node APIs.
+- **Races pick from saved lists too.** The race editor's team and driver fields are `<select>`s of
+  `teams.json` / `drivers.json` (`teamSelect`, `driverSelect`); `quickAdd()` creates a new one in place. Names
+  from older races that aren't saved stay selectable, marked "not on … page".
+- **Drivers page edits rosters** through `driverTeamEditor` + `updateRosters()`, validated by `teamListErrors()`.
 - **Rosters only use saved drivers.** The Teams page picks members from `drivers.json` (a dropdown, not free
   text); removing a driver on the Drivers page strips them from rosters. Both pages autosave via `autosaver()`.
 - **Teams are referenced by name too.** `DATA_DIR/teams.json` holds team colors and rosters. Roster roles

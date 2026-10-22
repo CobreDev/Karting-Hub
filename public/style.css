@@ -276,6 +276,9 @@ tr.flagged td { color: var(--text-muted); }
 .member { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 3px 8px 3px 4px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-1); color: var(--text-primary); white-space: nowrap; }
 a.member:hover { text-decoration: none; border-color: var(--text-muted); }
 .member .avatar { margin: 2px; }
+.member.editable { padding: 2px 3px 2px 4px; gap: 4px; }
+.member.editable select { font-size: 12px; padding: 2px 4px; }
+.members select.add-team { font-size: 13px; padding: 4px 6px; }
 .role { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 5px; border-radius: 4px; background: var(--surface-2); color: var(--text-secondary); }
 .role-owner, .role-core { color: var(--text-primary); border: 1px solid var(--text-muted); }
 .role-rotating { border: 1px dashed var(--border); }
@@ -334,7 +337,7 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   .stack-sm tr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 0; border-bottom: 1px solid var(--grid); }
   .stack-sm td { border: 0; padding: 0; }
   .stack-sm td:first-child { flex: 1; min-width: 0; }
-  .stack-sm .roster-cell, .stack-sm .actions-cell, .stack-sm .roster-row td { flex-basis: 100%; }
+  .stack-sm .roster-cell, .stack-sm .team-cell, .stack-sm .actions-cell, .stack-sm .roster-row td { flex-basis: 100%; }
   .stack-sm .actions-cell .row-actions { justify-content: flex-start; }
   .stack-sm tr.roster-row { padding: 0; border: 0; }
   .stack-sm .roster-row td { padding: 12px; border-radius: 8px; }

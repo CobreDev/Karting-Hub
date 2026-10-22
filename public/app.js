@@ -654,8 +654,6 @@ function renderEditor(message) {
     </section>
 
     ${r.karts.map((k, ki) => kartEditor(k, ki)).join('')}
-    <datalist id="driver-list">${state.registry.map((d) => `<option value="${esc(d.name)}">`).join('')}</datalist>
-    <datalist id="team-list">${state.teams.map((t) => `<option value="${esc(t.name)}">`).join('')}</datalist>
 
     <div class="sticky-save">
       <span id="save-msg" class="muted"></span>
@@ -680,9 +678,9 @@ function kartEditor(k, ki) {
       </div>
     </div>
     <div class="form-grid" style="margin-bottom:8px">
-      <label class="field">Team name<input type="text" list="team-list" autocomplete="off" data-k="${ki}" data-kfield="team" value="${esc(k.team)}" placeholder="Team name"></label>
+      <label class="field">Team${teamSelect(k, ki)}</label>
       <label class="field">Team color<input type="color" data-k="${ki}" data-kfield="color" value="${esc(editorTeamColor(k, ki))}"
-        title="${k.team ? 'Saved to the team, so it applies in every race' : 'Name the team to reuse this color'}"></label>
+        title="${k.team ? 'Saved to the team, so it applies in every race' : 'Pick a team to reuse this color'}"></label>
       <div class="field">Team photo${photoPicker('teams', k.team, editorTeamColor(k, ki))}</div>
     </div>
     <div class="secondary" style="font-size:13px">${k.laps.length} laps recorded${k.laps.length ? ` (1–${last})` : ''}${miss.length ? ` · missing ${miss.join(', ')}` : ''}</div>
@@ -693,7 +691,7 @@ function kartEditor(k, ki) {
       const to = s.toLap ?? last;
       const color = state.colorDraft.get(driverId(s.driver)) || '';
       const row = `<div class="stint-row">
-        <input type="text" placeholder="Driver name" list="driver-list" autocomplete="off" data-k="${ki}" data-s="${si}" data-sfield="driver" value="${esc(s.driver)}">
+        ${driverSelect(k, ki, s, si)}
         <span class="driver-color ${color ? '' : 'unset'}">
           <input type="color" title="${color ? 'Personal color (used in every race)' : 'Pick a personal color (optional)'}" aria-label="Personal color for ${esc(s.driver || 'driver')}" data-dcolor="${esc(s.driver)}" value="${color || '#8e8d86'}" ${s.driver.trim() ? '' : 'disabled'}>
           ${color ? `<button class="btn small clear-color" type="button" data-clear-color="${esc(s.driver)}" aria-label="Remove personal color" title="Remove personal color">✕</button>` : ''}
@@ -707,6 +705,53 @@ function kartEditor(k, ki) {
     }).join('')}
     <button class="btn small" type="button" data-act="add-stint" data-k="${ki}">+ Add driver</button>
   </section>`;
+}
+
+const NEW = '__new__';
+
+/** Team dropdown: saved teams only, plus "+ New team…". A name from an older race that isn't saved stays selectable. */
+function teamSelect(k, ki) {
+  const legacy = k.team && !savedTeam(k.team);
+  return `<select data-kteam="${ki}" aria-label="Team for kart ${esc(k.number)}">
+    <option value="" ${k.team ? '' : 'selected'}>No team</option>
+    ${state.teams.map((t) => `<option value="${esc(t.name)}" ${driverId(t.name) === driverId(k.team) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}
+    ${legacy ? `<option value="${esc(k.team)}" selected>${esc(k.team)} (not on Teams page)</option>` : ''}
+    <option value="${NEW}">+ New team…</option>
+  </select>`;
+}
+
+/** Driver dropdown: the kart's team roster first, then everyone else on the Drivers page, plus "+ New driver…". */
+function driverSelect(k, ki, s, si) {
+  const team = k.team ? savedTeam(k.team) : null;
+  const roster = new Set((team?.members || []).map((m) => driverId(m.driver)));
+  const opt = (name) => `<option value="${esc(name)}" ${driverId(name) === driverId(s.driver) ? 'selected' : ''}>${esc(name)}</option>`;
+  const inRoster = state.registry.filter((d) => roster.has(driverId(d.name)));
+  const others = state.registry.filter((d) => !roster.has(driverId(d.name)));
+  const legacy = s.driver.trim() && !isSavedDriver(s.driver);
+  return `<select data-sdriver="${ki}:${si}" aria-label="Driver ${si + 1} for kart ${esc(k.number)}">
+    <option value="" ${s.driver.trim() ? '' : 'selected'}>Choose a driver…</option>
+    ${inRoster.length ? `<optgroup label="${esc(team.name)} roster">${inRoster.map((d) => opt(d.name)).join('')}</optgroup>
+      <optgroup label="Other drivers">${others.map((d) => opt(d.name)).join('')}</optgroup>` : others.map((d) => opt(d.name)).join('')}
+    ${legacy ? `<option value="${esc(s.driver)}" selected>${esc(s.driver)} (not on Drivers page)</option>` : ''}
+    <option value="${NEW}">+ New driver…</option>
+  </select>`;
+}
+
+/** Adds a driver or team to its saved list straight from the race editor, so the half-edited race isn't lost. */
+async function quickAdd(kind, name) {
+  name = String(name || '').trim().slice(0, 60);
+  if (!name) return null;
+  if (kind === 'drivers') {
+    const found = state.registry.find((d) => driverId(d.name) === driverId(name));
+    if (found) return found.name;
+    state.registry = (await api('drivers', { method: 'PUT', auth: true, body: JSON.stringify({ drivers: [...state.registry, { name, color: '' }] }) })).drivers;
+    state.colorDraft.set(driverId(name), '');
+  } else {
+    const found = savedTeam(name);
+    if (found) return found.name;
+    state.teams = normalizeTeams((await api('teams', { method: 'PUT', auth: true, body: JSON.stringify({ teams: [...state.teams, { name, color: '', members: [] }] }) })).teams);
+  }
+  return name;
 }
 
 /** Color shown in the editor: an unsaved edit for this team name wins over the saved one. */
@@ -749,9 +794,29 @@ function bindEditor() {
       if (el.dataset.kfield === 'color' && k.team.trim()) state.teamColorDraft.set(driverId(k.team), el.value);
       else k[el.dataset.kfield] = el.value;
     });
-    // The team photo is keyed by team name, so refresh the picker once the name settles.
-    if (el.dataset.kfield === 'team') el.addEventListener('change', () => renderEditor());
   });
+  const tokenField = () => document.getElementById('token');
+  app.querySelectorAll('[data-kteam]').forEach((el) => el.addEventListener('change', async () => {
+    const k = r.karts[+el.dataset.kteam];
+    if (el.value !== NEW) { k.team = el.value; return renderEditor(); }
+    const name = prompt('New team name');
+    if (!name?.trim()) return renderEditor();
+    token.set(tokenField().value.trim());
+    try { k.team = await quickAdd('teams', name); renderEditor(`${esc(k.team)} added to the Teams page.`); }
+    catch (e) { renderEditor(`Couldn't add the team: ${esc(e.message)} (enter your admin token at the bottom first).`); }
+  }));
+  app.querySelectorAll('[data-sdriver]').forEach((el) => el.addEventListener('change', async () => {
+    const [ki, si] = el.dataset.sdriver.split(':').map(Number);
+    const k = r.karts[ki];
+    if (!k.stints.length) k.stints.push({ driver: '', toLap: null });
+    const st = k.stints[si];
+    if (el.value !== NEW) { st.driver = el.value; return renderEditor(); }
+    const name = prompt('New driver name');
+    if (!name?.trim()) return renderEditor();
+    token.set(tokenField().value.trim());
+    try { st.driver = await quickAdd('drivers', name); renderEditor(`${esc(st.driver)} added to the Drivers page.`); }
+    catch (e) { renderEditor(`Couldn't add the driver: ${esc(e.message)} (enter your admin token at the bottom first).`); }
+  }));
   bindPhotoPickers((msg) => renderEditor(msg));
   app.querySelectorAll('[data-sfield]').forEach((el) => {
     const update = () => {
@@ -762,8 +827,6 @@ function bindEditor() {
     };
     el.addEventListener('input', update);
     if (el.dataset.sfield === 'toLap') el.addEventListener('change', () => { sortStints(r.karts[+el.dataset.k]); renderEditor(); });
-    // Picking a known driver should show their saved color.
-    if (el.dataset.sfield === 'driver') el.addEventListener('change', () => renderEditor());
   });
   app.querySelectorAll('[data-dcolor]').forEach((el) => el.addEventListener('change', () => {
     state.colorDraft.set(driverId(el.dataset.dcolor), el.value);
@@ -944,6 +1007,40 @@ function driverTeams(name) {
     : '<span class="muted">—</span>';
 }
 
+/** Editable version for the Drivers page: each team with a role picker and ✕, plus "Add to team…". */
+function driverTeamEditor(name) {
+  const rows = state.teams.filter((t) => t.members.some((m) => driverId(m.driver) === driverId(name)));
+  const roleOf = (t) => t.members.find((m) => driverId(m.driver) === driverId(name)).role;
+  const others = state.teams.filter((t) => !rows.includes(t));
+  return `<div class="members">
+    ${rows.map((t) => `<span class="member editable">
+      ${avatar('teams', t.name, 18, t.color || 'var(--border)', `<span class="swatch" style="background:${t.color || 'var(--border)'}"></span>`)}${esc(t.name)}
+      <select data-dt-role="${esc(t.name)}" data-driver="${esc(name)}" aria-label="${esc(name)}'s role on ${esc(t.name)}">
+        ${Object.entries(ROLES).map(([k, r]) => `<option value="${k}" ${k === roleOf(t) ? 'selected' : ''}>${r.label}</option>`).join('')}
+      </select>
+      <button class="btn small clear-color" type="button" data-dt-remove="${esc(t.name)}" data-driver="${esc(name)}" aria-label="Take ${esc(name)} off ${esc(t.name)}">✕</button>
+    </span>`).join('')}
+    ${others.length ? `<select class="add-team" data-dt-add="${esc(name)}" aria-label="Add ${esc(name)} to a team">
+      <option value="">+ Add to team…</option>
+      ${others.map((t) => `<option value="${esc(t.name)}">${esc(t.name)}</option>`).join('')}
+    </select>` : state.teams.length ? '' : '<a class="muted" href="#/teams" style="font-size:13px">Add teams first</a>'}
+  </div>`;
+}
+
+/** Applies a roster change made on the Drivers page and saves the team list (same rules as the Teams page). */
+async function updateRosters(change, done) {
+  const next = state.teams.map((t) => ({ ...t, members: t.members.map((m) => ({ ...m })) }));
+  change(next);
+  const errors = teamListErrors(next);
+  if (errors.length) return done(esc(errors[0]));
+  try {
+    state.teams = normalizeTeams((await api('teams', { method: 'PUT', auth: true, body: JSON.stringify({ teams: next }) })).teams);
+    done();
+  } catch (e) {
+    done(`Couldn't update the team: ${esc(e.message)}`);
+  }
+}
+
 async function showDrivers() {
   document.title = 'Drivers · Karting Hub';
   const [races] = await Promise.all([api('races'), loadRegistry()]);
@@ -973,8 +1070,8 @@ function renderDrivers(message) {
         <div class="meta">Personal colors apply in every race, whichever team the driver is on.</div></div>
     </div>
     <section class="card section">
-      <div class="table-wrap"><table>
-        <thead><tr><th>Driver</th><th style="width:70px">Color</th><th class="hide-sm">Team</th><th class="hide-sm">Races</th>${edit ? '<th></th>' : ''}</tr></thead>
+      <div class="table-wrap"><table class="${edit ? 'stack-sm drivers-table' : ''}">
+        <thead><tr><th>Driver</th><th style="width:70px">Color</th><th class="${edit ? '' : 'hide-sm'}">Team</th><th class="hide-sm">Races</th>${edit ? '<th></th>' : ''}</tr></thead>
         <tbody>${state.driverDraft.map((d, i) => {
           const rs = racesFor(d.name);
           const ring = d.color || 'var(--border)';
@@ -987,9 +1084,9 @@ function renderDrivers(message) {
           <td>${edit
             ? `<span class="driver-color ${d.color ? '' : 'unset'}"><input type="color" data-reg="${i}" value="${d.color || '#8e8d86'}" aria-label="Color for ${esc(d.name)}">${d.color ? `<button class="btn small clear-color" type="button" data-reg-clear="${i}" aria-label="Remove color">✕</button>` : ''}</span>`
             : d.color ? `<span class="swatch" style="background:${d.color};width:16px;height:16px"></span>` : '<span class="muted">team</span>'}</td>
-          <td class="hide-sm">${driverTeams(d.name)}</td>
+          <td class="${edit ? 'team-cell' : 'hide-sm'}">${edit && saved ? driverTeamEditor(d.name) : driverTeams(d.name)}</td>
           <td class="secondary hide-sm">${rs.length ? rs.map((r) => `<a href="#/r/${encodeURIComponent(r.id)}">${esc(r.name)}</a>`).join(', ') : '<span class="muted">—</span>'}</td>
-          ${edit ? `<td><div class="row-actions">${saved ? photoButtons('drivers', d.name) : '<span class="muted" style="font-size:12px">not saved yet</span>'}
+          ${edit ? `<td class="actions-cell"><div class="row-actions">${saved ? photoButtons('drivers', d.name) : '<span class="muted" style="font-size:12px">not saved yet</span>'}
             <button class="btn small danger" type="button" data-reg-remove="${i}">Remove</button></div></td>` : ''}
         </tr>`;
         }).join('') || `<tr><td colspan="4" class="muted">No drivers yet — they're added when you save a race.</td></tr>`}</tbody>
@@ -1001,6 +1098,25 @@ function renderDrivers(message) {
   if (!edit) return;
   bindPhotoPickers((msg) => renderDrivers(msg));
   const changed = () => { renderDrivers(); state.saveDrivers(); };
+  const rosterDone = (msg) => renderDrivers(msg);
+  app.querySelectorAll('[data-dt-add]').forEach((el) => el.addEventListener('change', () => {
+    if (!el.value) return;
+    const name = el.dataset.dtAdd;
+    // First team defaults to Core; once they're bound somewhere, further teams default to Rotating.
+    const bound = state.teams.some((t) => t.members.some((m) => driverId(m.driver) === driverId(name) && ROLES[m.role].bound));
+    updateRosters((teams) => teams.find((t) => t.name === el.value).members.push({ driver: name, role: bound ? 'rotating' : 'core' }), rosterDone);
+  }));
+  app.querySelectorAll('[data-dt-role]').forEach((el) => el.addEventListener('change', () => {
+    updateRosters((teams) => {
+      teams.find((t) => t.name === el.dataset.dtRole).members.find((m) => driverId(m.driver) === driverId(el.dataset.driver)).role = el.value;
+    }, rosterDone);
+  }));
+  app.querySelectorAll('[data-dt-remove]').forEach((el) => el.addEventListener('click', () => {
+    updateRosters((teams) => {
+      const t = teams.find((o) => o.name === el.dataset.dtRemove);
+      t.members = t.members.filter((m) => driverId(m.driver) !== driverId(el.dataset.driver));
+    }, rosterDone);
+  }));
 
   app.querySelectorAll('[data-reg]').forEach((el) => el.addEventListener('change', () => { state.driverDraft[+el.dataset.reg].color = el.value; changed(); }));
   app.querySelectorAll('[data-reg-clear]').forEach((el) => el.addEventListener('click', () => { state.driverDraft[+el.dataset.regClear].color = ''; changed(); }));
