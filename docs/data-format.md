@@ -66,7 +66,8 @@ One file per race, `DATA_DIR/races/<id>.json`:
 ```
 
 Stints refer to drivers by name, compared case-insensitively with surrounding spaces ignored (`driverId`).
-An empty color means the driver uses their team's color. A driver with a color shows both: a split swatch
+Renaming a driver (`POST /api/drivers/rename`) updates the list, every race's stints, team rosters and the
+photo file together. An empty color means the driver uses their team's color. A driver with a color shows both: a split swatch
 and a two-tone line on the chart. `PUT /api/drivers` replaces the whole list.
 
 ## Teams

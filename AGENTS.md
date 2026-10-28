@@ -29,7 +29,8 @@ Race files hold laps and stints only. Stats, lap flags (`pit`, `slow`) and color
 renders (`computeDrivers`, `applyTeamColors`) and are never stored.
 
 Drivers and teams are referenced by name everywhere and matched with `driverId()` (trimmed, lowercased).
-`drivers.json` holds personal colors; `teams.json` holds team colors and rosters. Photos are keyed by
+`drivers.json` holds personal colors; `teams.json` holds team colors and rosters. Because of that, renaming
+goes through `renameDriver()` on the server, which rewrites races, rosters and the photo in one request. Photos are keyed by
 `imageId(name)`. A saved team color takes precedence over the older per-race `kart.color`.
 
 Roster roles are in `ROLES`: `owner` and `core` bind a driver to one team, `rotating` doesn't. The browser

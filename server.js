@@ -2,8 +2,8 @@
 import http from 'node:http';
 import { readFile, writeFile, readdir, rename, unlink, mkdir, access, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { IMAGE_KINDS, MAX_IMAGE_BYTES, imageType } from './public/lib/images.js';
-import { teamListErrors, normalizeTeams, raceSummary, fmtTime } from './public/lib/race.js';
+import { IMAGE_KINDS, MAX_IMAGE_BYTES, imageType, imageId } from './public/lib/images.js';
+import { teamListErrors, normalizeTeams, raceSummary, fmtTime, driverId } from './public/lib/race.js';
 import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -120,6 +120,36 @@ const readBody = async (req) => (await readRaw(req)).toString('utf8');
 
 const raceFile = (id) => path.join(RACES, `${id}.json`);
 
+// Races, rosters and photos refer to drivers by name, so a rename has to update all of them.
+async function renameDriver(res, from, to) {
+  if (!to || to.length > 60) return send(res, 400, { error: 'the new name needs 1 to 60 characters' });
+  const { drivers } = JSON.parse(await readFile(DRIVERS, 'utf8'));
+  const driver = drivers.find((d) => driverId(d.name) === driverId(from));
+  if (!driver) return send(res, 404, { error: `${from} isn't on the driver list` });
+  if (driverId(from) !== driverId(to) && drivers.some((d) => driverId(d.name) === driverId(to))) {
+    return send(res, 409, { error: `there is already a driver called ${to}` });
+  }
+  driver.name = to;
+  await writeJson(DRIVERS, { drivers: drivers.sort((a, b) => a.name.localeCompare(b.name)) });
+
+  let races = 0;
+  for (const f of (await readdir(RACES)).filter((f) => f.endsWith('.json'))) {
+    const race = JSON.parse(await readFile(path.join(RACES, f), 'utf8'));
+    let changed = false;
+    for (const k of race.karts || []) for (const s of k.stints || []) {
+      if (driverId(s.driver) === driverId(from)) { s.driver = to; changed = true; }
+    }
+    if (changed) { await writeJson(path.join(RACES, f), race); races++; }
+  }
+
+  const teams = normalizeTeams(JSON.parse(await readFile(TEAMS, 'utf8').catch(() => '{"teams":[]}')).teams);
+  for (const t of teams) for (const m of t.members) if (driverId(m.driver) === driverId(from)) m.driver = to;
+  await writeJson(TEAMS, { teams });
+
+  if (imageId(from) !== imageId(to)) await rename(imageFile('drivers', imageId(from)), imageFile('drivers', imageId(to))).catch(() => {});
+  return send(res, 200, { ok: true, races });
+}
+
 async function writeJson(file, data) {
   const tmp = `${file}.${process.pid}.tmp`;
   await writeFile(tmp, JSON.stringify(data, null, 2));
@@ -202,6 +232,17 @@ async function api(req, res, parts) {
       .sort((a, b) => a.name.localeCompare(b.name));
     await writeJson(TEAMS, { teams });
     return send(res, 200, { ok: true, teams });
+  }
+  if (parts[1] === 'drivers' && parts[2] === 'rename') {
+    if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+    if (!checkAuth(req, res)) return;
+    let body;
+    try {
+      body = JSON.parse(await readBody(req));
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.status ? e.message : 'invalid JSON' });
+    }
+    return renameDriver(res, String(body?.from ?? '').trim(), String(body?.to ?? '').trim());
   }
   if (parts[1] === 'drivers') {
     if (req.method === 'GET') return send(res, 200, JSON.parse(await readFile(DRIVERS, 'utf8').catch(() => '{"drivers":[]}')));

@@ -91,7 +91,8 @@ function renderDrivers(message) {
             : d.color ? `<span class="swatch large" style="background:${d.color}"></span>` : '<span class="muted">team</span>'}</td>
           <td class="${edit ? 'team-cell' : 'hide-sm'}">${edit && saved ? driverTeamEditor(d.name) : driverTeams(d.name)}</td>
           <td class="secondary hide-sm">${rs.length ? rs.map((r) => `<a href="/r/${encodeURIComponent(r.id)}">${esc(r.name)}</a>`).join(', ') : '<span class="muted">—</span>'}</td>
-          ${edit ? `<td class="actions-cell"><div class="row-actions">${saved ? photoButtons('drivers', d.name) : '<span class="hint">Not saved yet</span>'}
+          ${edit ? `<td class="actions-cell"><div class="row-actions">${saved ? `${photoButtons('drivers', d.name)}
+            <button class="btn small" type="button" data-reg-rename="${esc(d.name)}">Rename</button>` : '<span class="hint">Not saved yet</span>'}
             <button class="btn small danger" type="button" data-reg-remove="${i}">Remove</button></div></td>` : ''}
         </tr>`;
         }).join('') || `<tr><td colspan="4" class="muted">No drivers yet. Add one below or save a race.</td></tr>`}</tbody>
@@ -125,6 +126,22 @@ function renderDrivers(message) {
 
   app.querySelectorAll('[data-reg]').forEach((el) => el.addEventListener('change', () => { state.driverDraft[+el.dataset.reg].color = el.value; changed(); }));
   app.querySelectorAll('[data-reg-clear]').forEach((el) => el.addEventListener('click', () => { state.driverDraft[+el.dataset.regClear].color = ''; changed(); }));
+  app.querySelectorAll('[data-reg-rename]').forEach((el) => el.addEventListener('click', async () => {
+    const from = el.dataset.regRename;
+    const to = prompt(`Rename ${from} to:`, from)?.trim();
+    if (!to || to === from) return;
+    token.set(document.getElementById('token').value.trim());
+    try {
+      const { races } = await api('drivers/rename', { method: 'POST', auth: true, body: JSON.stringify({ from, to }) });
+      const [summaries] = await Promise.all([api('races'), loadLists()]);
+      state.driverRaces = summaries;
+      state.driverDraft = state.drivers.map((x) => ({ ...x }));
+      refreshPreviews({ drivers: [to] });
+      renderDrivers(`Renamed ${esc(from)} to ${esc(to)}${races ? ` in ${races} race${races === 1 ? '' : 's'}` : ''}.`);
+    } catch (e) {
+      renderDrivers(`Couldn't rename ${esc(from)}: ${esc(e.message)}`);
+    }
+  }));
   app.querySelectorAll('[data-reg-remove]').forEach((el) => el.addEventListener('click', () => {
     const d = state.driverDraft[+el.dataset.regRemove];
     const rosters = state.teams.filter((t) => t.members.some((m) => driverId(m.driver) === driverId(d.name)));
