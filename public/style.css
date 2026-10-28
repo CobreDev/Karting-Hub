@@ -207,6 +207,7 @@ tbody tr.clickable:hover, tbody tr.focused { background: var(--surface-2); }
   border-radius: 50%; border: 1px solid var(--border); background: var(--surface-1);
   font: 600 11px/1 system-ui, sans-serif; color: var(--text-secondary);
 }
+.figure .help { vertical-align: 6px; margin-left: 2px; }
 .help:hover { border-color: var(--text-muted); color: var(--text-primary); }
 .popover {
   max-width: min(420px, calc(100vw - 32px)); padding: 18px 20px; border-radius: 8px;
