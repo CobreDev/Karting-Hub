@@ -348,9 +348,14 @@ label.field, div.field { display: flex; flex-direction: column; gap: 4px; font-s
   .race-row { grid-template-columns: 1fr; gap: 2px; padding: 14px 0; }
   .race-date { font-size: 13px; }
   .race-head { flex-direction: column; gap: 18px; }
-  .figures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 16px; width: 100%; }
+  .figures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 16px; width: 100%; }
+  /* labels, figures and notes each share a row, so a label that wraps doesn't push its figure down */
+  .figures > div { display: grid; grid-row: span 3; grid-template-rows: subgrid; }
+  .figures dt { align-self: end; }
+  .figures .help { width: 15px; height: 15px; font-size: 10px; }
   .figures dd.figure { font-size: 22px; }
-  .rm-head .figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rm-head .figures { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 12px; }
+  .rm-head .figures > div { grid-row: auto; display: block; }
   .stints { min-width: 0; width: 100%; }
 
   td, th { padding-left: 6px; padding-right: 6px; }

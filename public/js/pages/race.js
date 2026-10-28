@@ -80,7 +80,7 @@ export async function showRace(id, focusKey, teamArg) {
       <dl class="figures">
         ${fastest ? `<div><dt>Fastest lap</dt><dd class="figure">${fmtTime(fastest.best)}</dd>
           <dd>${esc(fastest.driver)}, lap ${fastest.bestLapNo}</dd></div>` : ''}
-        ${consistent ? `<div><dt>Most consistent ${helpButton}</dt><dd class="figure">±${(consistent.stdev / 1000).toFixed(3)}</dd>
+        ${consistent ? `<div><dt>Most <span class="nowrap">consistent ${helpButton}</span></dt><dd class="figure">±${(consistent.stdev / 1000).toFixed(3)}</dd>
           <dd>${esc(consistent.driver)}</dd></div>` : ''}
         <div><dt>Laps</dt><dd class="figure">${raceLaps}</dd>
           <dd>${race.karts.length > 1 && race.karts.length <= 4
