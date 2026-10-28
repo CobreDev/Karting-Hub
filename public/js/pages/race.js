@@ -2,7 +2,7 @@ import { missingLaps, computeDrivers, fmtTime, fmtDelta, quantile, DEFAULT_SLOW_
 import { lapChart } from '../chart.js';
 import { api, app, esc, fmtClock, shortName, state, token } from '../core.js';
 import { avatar, driverAvatar } from '../photos.js';
-import { uploadPreview } from '../preview.js';
+import { CARD_DESIGN, uploadPreview } from '../preview.js';
 import { applyTeamColors, loadLists, swatch, teamLabel } from '../registry.js';
 import { navigate } from '../router.js';
 
@@ -149,7 +149,7 @@ export async function showRace(id, focusKey, teamArg) {
 
   };
   // races saved before link previews existed
-  if (state.config.editable && token.get() && !state.images.previews?.[race.id]) uploadPreview(race).catch(() => {});
+  if (state.config.editable && token.get() && !(state.images.previews?.[race.id] >= CARD_DESIGN)) uploadPreview(race).catch(() => {});
   document.getElementById('copy-link').addEventListener('click', async (ev) => {
     try { await navigator.clipboard.writeText(location.href); ev.target.textContent = 'Copied!'; }
     catch { prompt('Copy this link:', location.href); }

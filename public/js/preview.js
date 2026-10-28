@@ -17,110 +17,120 @@ const loadImg = async (url) => {
   }
 };
 
+// Hairline light theme: ink on paper, rules instead of boxes, the fastest lap as the biggest number.
+// Cards saved before this date use an older design; an admin opening the race redraws them.
+export const CARD_DESIGN = Date.parse('2026-10-28T03:30Z');
+const INK = '#161614', SECONDARY = '#55534d', MUTED = '#6d6b64', RULE = '#dcdad2', PAPER = '#f6f5f1', SURFACE = '#efeee9';
+
 async function drawPreviewCard(race) {
   const sum = raceSummary(race);
-  const W = 1200, H = 630, PAD = 64, STRIP = 60;
+  const W = 1200, H = 630, PAD = 64, maxW = W - PAD * 2;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d');
-  const font = (weight, size) => `${weight} ${size}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
-  const darkColor = (hex) => teamShades(hex, 1, 'dark')[0];
-  const initialsOf = (name) => String(name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
-  const fit = (text, max) => {
-    if (ctx.measureText(text).width <= max) return text;
-    while (text.length > 1 && ctx.measureText(`${text}…`).width > max) text = text.slice(0, -1);
-    return `${text}…`;
+  const font = (weight, size) => `${weight} ${size}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+  const text = (str, x, y, { weight = 400, size = 26, color = INK, track = 0 } = {}) => {
+    ctx.font = font(weight, size);
+    ctx.fillStyle = color;
+    if ('letterSpacing' in ctx) ctx.letterSpacing = `${track * size}px`;
+    ctx.fillText(str, x, y);
+    const w = ctx.measureText(str).width;
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+    return w;
   };
-  const disc = (img, x, y, r, color, label) => {
+  const lightColor = (hex) => teamShades(hex, 1, 'light')[0];
+  const initialsOf = (name) => String(name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const fit = (str, max) => {
+    if (ctx.measureText(str).width <= max) return str;
+    while (str.length > 1 && ctx.measureText(`${str}…`).width > max) str = str.slice(0, -1);
+    return `${str}…`;
+  };
+  const rule = (y) => { ctx.fillStyle = RULE; ctx.fillRect(PAD, y, maxW, 2); };
+  // photo or initials in a ring of the item's color; a second color takes the top-left half of the ring
+  const disc = (img, x, y, r, color, label, second) => {
     ctx.save();
-    ctx.beginPath(); ctx.arc(x, y, r + 4, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, r + 3, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+    if (second) { ctx.beginPath(); ctx.arc(x, y, r + 3, Math.PI * 0.75, Math.PI * 1.75); ctx.closePath(); ctx.fillStyle = second; ctx.fill(); }
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.closePath();
     if (img) { ctx.clip(); ctx.drawImage(img, x - r, y - r, r * 2, r * 2); }
     else {
-      ctx.fillStyle = '#242422'; ctx.fill();
-      ctx.fillStyle = '#f0efec'; ctx.font = font(700, r * 0.8); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = SURFACE; ctx.fill();
+      ctx.fillStyle = SECONDARY; ctx.font = font(650, r * 0.75); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(initialsOf(label), x, y + 1);
     }
     ctx.restore();
   };
 
-  ctx.fillStyle = '#111110'; ctx.fillRect(0, 0, W, H);
-  const sq = 30;
-  for (let y = 0; y < H; y += sq) for (let c = 0; c < 2; c++) {
-    if ((y / sq + c) % 2 === 0) { ctx.fillStyle = '#f0efec'; ctx.fillRect(W - STRIP + c * sq, y, sq, sq); }
-  }
-  const maxW = W - STRIP - PAD * 2;
+  ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  text('Karting Hub', PAD, 84, { weight: 600, size: 24, color: MUTED });
 
-  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if ((i + j) % 2 === 0) { ctx.fillStyle = '#f0efec'; ctx.fillRect(PAD + i * 7, 48 + j * 7, 7, 7); }
-  ctx.fillStyle = '#8e8d86'; ctx.font = font(700, 22); ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
-  ctx.fillText('KARTING HUB', PAD + 42, 70);
-
-  ctx.fillStyle = '#f0efec'; ctx.font = font(800, 62);
-  const words = sum.name.split(/\s+/);
+  // title block sits on the first rule, so a one-line name leaves the space above it
+  const RULE1 = 318;
+  ctx.font = font(750, 62);
   const lines = [''];
-  for (const w of words) {
+  for (const w of sum.name.split(/\s+/)) {
     const next = lines[lines.length - 1] ? `${lines[lines.length - 1]} ${w}` : w;
     if (ctx.measureText(next).width > maxW && lines[lines.length - 1]) lines.push(w); else lines[lines.length - 1] = next;
   }
   const shown = lines.slice(0, 2);
   if (lines.length > 2) shown[1] = fit(`${shown[1]} ${lines.slice(2).join(' ')}`, maxW);
-  let y = 150;
-  for (const l of shown) { ctx.fillText(l, PAD, y); y += 70; }
-  ctx.fillStyle = '#c3c2b7'; ctx.font = font(500, 30);
-  ctx.fillText(fit([sum.date, sum.track].filter(Boolean).join('  ·  '), maxW), PAD, y - 12);
+  const metaY = RULE1 - 40;
+  // a second line steps down a size so it clears the wordmark
+  const size = shown.length > 1 ? 56 : 62;
+  shown.forEach((l, i) => text(l, PAD, metaY - 54 - (shown.length - 1 - i) * (size + 6), { weight: 750, size, track: -0.025 }));
+  ctx.font = font(400, 28);
+  text(fit([sum.date, sum.track].filter(Boolean).join(' · '), maxW), PAD, metaY, { size: 28, color: SECONDARY });
+  rule(RULE1);
 
   const karts = race.karts || [];
-  let tx = PAD;
-  const ty = y + 58;
-  const teamImgs = await Promise.all(karts.map((k) => loadImg(k.team && photoUrl('teams', k.team))));
-  ctx.font = font(650, 28);
-  karts.slice(0, 4).forEach((k, i) => {
-    const color = darkColor(teamColor(k, i));
-    ctx.font = font(650, 28);
-    const name = fit(k.team || `Kart #${k.number}`, 300);
-    const nameW = ctx.measureText(name).width;
-    ctx.font = font(500, 24);
-    const num = k.team ? `#${k.number}` : '';
-    const w = 54 + nameW + (num ? 10 + ctx.measureText(num).width : 0);
-    if (tx + w > W - STRIP - PAD) return; // more teams than fit: the rest are left off the card
-    disc(teamImgs[i], tx + 22, ty - 9, 20, color, name);
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#f0efec'; ctx.font = font(650, 28); ctx.fillText(name, tx + 54, ty);
-    if (num) { ctx.fillStyle = '#8e8d86'; ctx.font = font(500, 24); ctx.fillText(num, tx + 64 + nameW, ty); }
-    tx += w + 36;
-  });
-
   const lapCount = Math.max(0, ...karts.map((k) => (k.laps.length ? k.laps[k.laps.length - 1].lap : 0)));
   const longest = Math.max(0, ...karts.map((k) => k.laps.reduce((a, l) => a + l.ms, 0)));
   const hrs = longest / 3600000;
   // 1:59:01 -> "2 h", 1:30:00 -> "1.5 h"
   const hours = hrs < 1 ? `${Math.round(longest / 60000)} min` : Math.abs(hrs - Math.round(hrs)) < 0.1 ? `${Math.round(hrs)} h` : `${hrs.toFixed(1)} h`;
-  ctx.fillStyle = '#8e8d86'; ctx.font = font(500, 24); ctx.textAlign = 'left';
-  ctx.fillText(`${karts.length} kart${karts.length === 1 ? '' : 's'}  ·  ${sum.drivers.length} driver${sum.drivers.length === 1 ? '' : 's'}  ·  ${lapCount} laps  ·  ${hours}`, PAD, ty + 62);
+  const LABEL = RULE1 + 54, FIG = LABEL + 72, SUB = FIG + 46;
+  const figure = (label, value, x) => {
+    text(label, x, LABEL, { weight: 500, size: 24, color: MUTED });
+    return text(value, x, FIG, { weight: 650, size: 68, track: -0.02 });
+  };
 
   if (sum.fastest) {
     const f = sum.fastest;
     const ki = karts.findIndex((k) => k.number === f.kart);
-    const tColor = darkColor(teamColor(karts[ki] || {}, Math.max(0, ki)));
+    const tColor = lightColor(teamColor(karts[ki] || {}, Math.max(0, ki)));
     const own = ownColors().get(driverId(f.driver));
-    const dColor = own ? darkColor(own) : tColor;
-    const bx = PAD, by = 438, bw = maxW, bh = 132;
-    ctx.fillStyle = '#1c1c1b';
-    ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 18); ctx.fill();
-    ctx.fillStyle = tColor; ctx.beginPath(); ctx.roundRect(bx, by, 10, bh, [18, 0, 0, 18]); ctx.fill();
+    figure('Fastest lap', fmtTime(f.ms), PAD);
     const dImg = await loadImg(photoUrl('drivers', f.driver));
-    disc(dImg, bx + 92, by + bh / 2, 46, dColor, f.driver);
-    if (own) { ctx.beginPath(); ctx.arc(bx + 92, by + bh / 2, 54, Math.PI * 0.75, Math.PI * 1.75); ctx.strokeStyle = tColor; ctx.lineWidth = 4; ctx.stroke(); }
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#8e8d86'; ctx.font = font(700, 20); ctx.fillText('FASTEST LAP', bx + 170, by + 42);
-    ctx.fillStyle = '#f0efec'; ctx.font = font(800, 64); ctx.fillText(fmtTime(f.ms), bx + 166, by + 108);
-    const tw = ctx.measureText(fmtTime(f.ms)).width;
-    ctx.font = font(700, 34); ctx.fillStyle = '#f0efec';
-    ctx.fillText(fit(f.driver, bw - tw - 230), bx + 196 + tw, by + 74);
-    ctx.font = font(500, 26); ctx.fillStyle = '#c3c2b7';
-    ctx.fillText(fit(`${f.team || `Kart #${f.kart}`} · lap ${f.lap}`, bw - tw - 230), bx + 196 + tw, by + 110);
+    disc(dImg, PAD + 17, SUB - 9, 17, own ? lightColor(own) : tColor, f.driver, own && tColor);
+    ctx.font = font(600, 26);
+    const name = fit(f.driver, 300);
+    const nw = text(name, PAD + 46, SUB, { weight: 600, size: 26 });
+    ctx.font = font(400, 26);
+    text(fit(` · lap ${f.lap}`, 420 - nw), PAD + 46 + nw, SUB, { size: 26, color: SECONDARY });
   }
+  const cols = [['Laps', String(lapCount)], ['Duration', hours], ['Drivers', String(sum.drivers.length)]];
+  cols.forEach(([label, value], i) => figure(label, value, PAD + 520 + i * 210));
+
+  const RULE2 = SUB + 34;
+  rule(RULE2);
+  const ty = RULE2 + 62;
+  let tx = PAD;
+  const teamImgs = await Promise.all(karts.map((k) => loadImg(k.team && photoUrl('teams', k.team))));
+  karts.forEach((k, i) => {
+    ctx.font = font(650, 28);
+    const name = fit(k.team || `Kart #${k.number}`, 320);
+    const nameW = ctx.measureText(name).width;
+    ctx.font = font(400, 24);
+    const num = k.team ? `#${k.number}` : '';
+    const w = 50 + nameW + (num ? 10 + ctx.measureText(num).width : 0);
+    if (tx + w > W - PAD) return; // more teams than fit: the rest are left off the card
+    disc(teamImgs[i], tx + 18, ty - 10, 18, lightColor(teamColor(k, i)), name);
+    text(name, tx + 50, ty, { weight: 650, size: 28 });
+    if (num) text(num, tx + 60 + nameW, ty, { size: 24, color: MUTED });
+    tx += w + 40;
+  });
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
 }
 
