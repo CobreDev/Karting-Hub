@@ -4,7 +4,7 @@ import { api, state, token } from './core.js';
 import { photoUrl } from './photos.js';
 import { ownColors, teamColor } from './registry.js';
 
-// Drawn here on a canvas because the server has no image library; uploaded as /images/previews/<race id>.
+// Link-preview card. Drawn in the browser because the server has no image library.
 const loadImg = async (url) => {
   if (!url) return null;
   try {
@@ -32,7 +32,6 @@ async function drawPreviewCard(race) {
     while (text.length > 1 && ctx.measureText(`${text}…`).width > max) text = text.slice(0, -1);
     return `${text}…`;
   };
-  // Round photo with a colored ring, or a colored disc with initials.
   const disc = (img, x, y, r, color, label) => {
     ctx.save();
     ctx.beginPath(); ctx.arc(x, y, r + 4, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
@@ -46,7 +45,6 @@ async function drawPreviewCard(race) {
     ctx.restore();
   };
 
-  // Background and checkered strip.
   ctx.fillStyle = '#111110'; ctx.fillRect(0, 0, W, H);
   const sq = 30;
   for (let y = 0; y < H; y += sq) for (let c = 0; c < 2; c++) {
@@ -54,12 +52,10 @@ async function drawPreviewCard(race) {
   }
   const maxW = W - STRIP - PAD * 2;
 
-  // Brand line.
   for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if ((i + j) % 2 === 0) { ctx.fillStyle = '#f0efec'; ctx.fillRect(PAD + i * 7, 48 + j * 7, 7, 7); }
   ctx.fillStyle = '#8e8d86'; ctx.font = font(700, 22); ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
   ctx.fillText('KARTING HUB', PAD + 42, 70);
 
-  // Race name (up to two lines) and date · track.
   ctx.fillStyle = '#f0efec'; ctx.font = font(800, 62);
   const words = sum.name.split(/\s+/);
   const lines = [''];
@@ -74,7 +70,6 @@ async function drawPreviewCard(race) {
   ctx.fillStyle = '#c3c2b7'; ctx.font = font(500, 30);
   ctx.fillText(fit([sum.date, sum.track].filter(Boolean).join('  ·  '), maxW), PAD, y - 12);
 
-  // Teams.
   const karts = race.karts || [];
   let tx = PAD;
   const ty = y + 58;
@@ -96,16 +91,14 @@ async function drawPreviewCard(race) {
     tx += w + 36;
   });
 
-  // Race stats under the teams.
   const lapCount = Math.max(0, ...karts.map((k) => (k.laps.length ? k.laps[k.laps.length - 1].lap : 0)));
   const longest = Math.max(0, ...karts.map((k) => k.laps.reduce((a, l) => a + l.ms, 0)));
   const hrs = longest / 3600000;
-  // 1:59:01 of laps reads as "2 h"; 1:30 as "1.5 h"; short races in minutes.
+  // 1:59:01 -> "2 h", 1:30:00 -> "1.5 h"
   const hours = hrs < 1 ? `${Math.round(longest / 60000)} min` : Math.abs(hrs - Math.round(hrs)) < 0.1 ? `${Math.round(hrs)} h` : `${hrs.toFixed(1)} h`;
   ctx.fillStyle = '#8e8d86'; ctx.font = font(500, 24); ctx.textAlign = 'left';
   ctx.fillText(`${karts.length} kart${karts.length === 1 ? '' : 's'}  ·  ${sum.drivers.length} driver${sum.drivers.length === 1 ? '' : 's'}  ·  ${lapCount} laps  ·  ${hours}`, PAD, ty + 62);
 
-  // Fastest lap panel.
   if (sum.fastest) {
     const f = sum.fastest;
     const ki = karts.findIndex((k) => k.number === f.kart);
@@ -131,7 +124,6 @@ async function drawPreviewCard(race) {
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
 }
 
-/** Draws and uploads the race's preview card. Needs the admin token; quietly does nothing without one. */
 export async function uploadPreview(race) {
   if (!token.get() || !race?.id) return false;
   const blob = await drawPreviewCard(race);
@@ -143,10 +135,7 @@ export async function uploadPreview(race) {
   return true;
 }
 
-/**
- * Redraws the preview cards of every race a change touches (a driver's or team's photo or color), a moment after
- * the change, so cards already shared stay current. Batches quick successive changes into one pass.
- */
+// Redraw the cards of races that use a changed photo or color. Debounced so a burst of edits is one pass.
 const previewQueue = { drivers: new Set(), teams: new Set(), races: new Set() };
 let previewTimer;
 export function refreshPreviews({ drivers = [], teams = [], races = [] } = {}) {
@@ -167,7 +156,6 @@ async function flushPreviews() {
     try { await uploadPreview(await api(`races/${encodeURIComponent(r.id)}`)); } catch { /* best effort: the next change retries */ }
   }
 }
-/** Names whose color differs between two saved lists (including names that were added or removed). */
 export const colorChanges = (before, after) => {
   const was = new Map(before.map((x) => [driverId(x.name), x.color || '']));
   const now = new Map(after.map((x) => [driverId(x.name), x.color || '']));

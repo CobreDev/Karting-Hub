@@ -3,7 +3,7 @@ import { isHex } from '../../lib/color.js';
 import { api, app, esc, state, token } from '../core.js';
 import { bindPhotoPickers, photoPicker } from '../photos.js';
 import { colorChanges, refreshPreviews, uploadPreview } from '../preview.js';
-import { isSavedDriver, loadRegistry, savedTeam, swatch, teamColor } from '../registry.js';
+import { isSavedDriver, loadLists, savedTeam, swatch, teamColor } from '../registry.js';
 import { navigate } from '../router.js';
 
 export async function showEditor(id) {
@@ -16,9 +16,8 @@ export async function showEditor(id) {
   };
   state.isNew = !id;
   state.pending = [];
-  await loadRegistry();
-  // Personal colors edited here are saved to the shared driver list along with the race.
-  state.colorDraft = new Map(state.registry.map((d) => [driverId(d.name), d.color || '']));
+  await loadLists();
+  state.colorDraft = new Map(state.drivers.map((d) => [driverId(d.name), d.color || '']));
   state.teamColorDraft = new Map(state.teams.map((t) => [driverId(t.name), t.color || '']));
   document.title = `${id ? 'Edit' : 'New'} race · Karting Hub`;
   renderEditor();
@@ -119,7 +118,7 @@ function kartEditor(k, ki) {
 
 const NEW = '__new__';
 
-/** Team dropdown: saved teams only, plus "+ New team…". A name from an older race that isn't saved stays selectable. */
+// Saved teams only. A name from an older race that isn't saved stays selectable.
 function teamSelect(k, ki) {
   const legacy = k.team && !savedTeam(k.team);
   return `<select data-kteam="${ki}" aria-label="Team for kart ${esc(k.number)}">
@@ -130,13 +129,12 @@ function teamSelect(k, ki) {
   </select>`;
 }
 
-/** Driver dropdown: the kart's team roster first, then everyone else on the Drivers page, plus "+ New driver…". */
 function driverSelect(k, ki, s, si) {
   const team = k.team ? savedTeam(k.team) : null;
   const roster = new Set((team?.members || []).map((m) => driverId(m.driver)));
   const opt = (name) => `<option value="${esc(name)}" ${driverId(name) === driverId(s.driver) ? 'selected' : ''}>${esc(name)}</option>`;
-  const inRoster = state.registry.filter((d) => roster.has(driverId(d.name)));
-  const others = state.registry.filter((d) => !roster.has(driverId(d.name)));
+  const inRoster = state.drivers.filter((d) => roster.has(driverId(d.name)));
+  const others = state.drivers.filter((d) => !roster.has(driverId(d.name)));
   const legacy = s.driver.trim() && !isSavedDriver(s.driver);
   return `<select data-sdriver="${ki}:${si}" aria-label="Driver ${si + 1} for kart ${esc(k.number)}">
     <option value="" ${s.driver.trim() ? '' : 'selected'}>Choose a driver…</option>
@@ -147,14 +145,14 @@ function driverSelect(k, ki, s, si) {
   </select>`;
 }
 
-/** Adds a driver or team to its saved list straight from the race editor, so the half-edited race isn't lost. */
+// Create a driver or team without leaving the half-edited race.
 async function quickAdd(kind, name) {
   name = String(name || '').trim().slice(0, 60);
   if (!name) return null;
   if (kind === 'drivers') {
-    const found = state.registry.find((d) => driverId(d.name) === driverId(name));
+    const found = state.drivers.find((d) => driverId(d.name) === driverId(name));
     if (found) return found.name;
-    state.registry = (await api('drivers', { method: 'PUT', auth: true, body: JSON.stringify({ drivers: [...state.registry, { name, color: '' }] }) })).drivers;
+    state.drivers = (await api('drivers', { method: 'PUT', auth: true, body: JSON.stringify({ drivers: [...state.drivers, { name, color: '' }] }) })).drivers;
     state.colorDraft.set(driverId(name), '');
   } else {
     const found = savedTeam(name);
@@ -164,15 +162,13 @@ async function quickAdd(kind, name) {
   return name;
 }
 
-/** Color shown in the editor: an unsaved edit for this team name wins over the saved one. */
 function editorTeamColor(k, ki) {
   const draft = k.team && state.teamColorDraft.get(driverId(k.team));
   return isHex(draft) ? draft : teamColor(k, ki);
 }
 
-/** For a known team, offer its roster as one-click driver rows. */
 function rosterHint(k, ki) {
-  // A kart without a team name has no roster to offer (an empty name must not be treated as a team).
+  // '' is not a team
   const team = k.team ? savedTeam(k.team) : null;
   if (!team?.members?.length) return '';
   const have = new Set(k.stints.map((s) => driverId(s.driver)));
@@ -200,7 +196,7 @@ function bindEditor() {
   app.querySelectorAll('[data-kfield]').forEach((el) => {
     el.addEventListener('input', () => {
       const k = r.karts[+el.dataset.k];
-      // A named team's color goes to the shared team list; an unnamed kart keeps it on the kart.
+      // named team: color is saved on the team; unnamed kart: on the kart
       if (el.dataset.kfield === 'color' && k.team.trim()) state.teamColorDraft.set(driverId(k.team), el.value);
       else k[el.dataset.kfield] = el.value;
     });
@@ -276,7 +272,6 @@ function bindEditor() {
     if (act === 'remove-kart' && confirm(`Remove kart #${k.number} and its laps?`)) r.karts.splice(+el.dataset.k, 1);
     if (act === 'clear-laps' && confirm(`Clear all laps for kart #${k.number}?`)) k.laps = [];
     if (act === 'add-member') {
-      // Fill the first empty driver row, or add a new row at the end.
       const empty = k.stints.find((s) => !s.driver.trim());
       if (empty) empty.driver = el.dataset.driver;
       else {
@@ -299,7 +294,7 @@ function bindEditor() {
       const lap = +el.dataset.lap;
       if (!k.stints.length) k.stints.push({ driver: '', toLap: null });
       if (!k.stints.some((s) => s.toLap === lap)) {
-        // The stint covering this lap now ends here; a new (unnamed) driver takes over after it.
+        // the current stint ends at this lap; a new, unnamed driver takes over
         sortStints(k);
         const idx = k.stints.findIndex((s) => (s.toLap ?? Infinity) > lap);
         const cur = k.stints[idx];
@@ -344,20 +339,18 @@ async function saveRace() {
   }
 }
 
-/** Adds any new driver names from the race to the shared list and applies color edits. */
 async function saveRegistryFromRace(r) {
-  const list = new Map(state.registry.map((d) => [driverId(d.name), { ...d }]));
+  const list = new Map(state.drivers.map((d) => [driverId(d.name), { ...d }]));
   for (const k of r.karts) for (const s of k.stints) {
     const name = s.driver.trim();
     if (name && !list.has(driverId(name))) list.set(driverId(name), { name, color: '' });
   }
   for (const [id, color] of state.colorDraft) if (list.has(id)) list.get(id).color = color;
   const next = [...list.values()];
-  refreshPreviews({ drivers: colorChanges(state.registry, next) });
-  if (JSON.stringify(next) !== JSON.stringify(state.registry)) {
-    state.registry = (await api('drivers', { method: 'PUT', auth: true, body: JSON.stringify({ drivers: next }) })).drivers;
+  refreshPreviews({ drivers: colorChanges(state.drivers, next) });
+  if (JSON.stringify(next) !== JSON.stringify(state.drivers)) {
+    state.drivers = (await api('drivers', { method: 'PUT', auth: true, body: JSON.stringify({ drivers: next }) })).drivers;
   }
-  // Teams: add new team names, apply color edits.
   const teams = new Map(state.teams.map((t) => [driverId(t.name), { ...t, members: [...t.members] }]));
   for (const k of r.karts) {
     const name = k.team.trim();

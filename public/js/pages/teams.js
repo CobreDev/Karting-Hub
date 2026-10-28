@@ -3,11 +3,11 @@ import { autosaver, saveBar, showSaveStatus } from '../autosave.js';
 import { api, app, esc, state, token } from '../core.js';
 import { avatar, bindPhotoPickers, initials, personAvatar, photoButtons } from '../photos.js';
 import { colorChanges, refreshPreviews } from '../preview.js';
-import { driverRing, isSavedDriver, loadRegistry, swatch, teamColor } from '../registry.js';
+import { driverRing, isSavedDriver, loadLists, swatch, teamColor } from '../registry.js';
 
 export async function showTeams() {
   document.title = 'Teams · Karting Hub';
-  const [races] = await Promise.all([api('races'), loadRegistry()]);
+  const [races] = await Promise.all([api('races'), loadLists()]);
   state.teamDraft = state.teams.map((t) => ({ ...t, members: t.members.map((m) => ({ ...m })) }));
   state.teamRaces = races;
   state.openTeam = null;
@@ -17,7 +17,7 @@ export async function showTeams() {
     body: () => ({ teams: state.teamDraft }),
     validate: () => teamListErrors(state.teamDraft),
     onSaved: (res) => {
-      // Photo buttons appear once a new team is on the saved list.
+      // photo uploads need the team to exist on the server
       const before = state.teams.length;
       refreshPreviews({ teams: colorChanges(state.teams, res.teams) });
       state.teams = normalizeTeams(res.teams);
@@ -28,7 +28,6 @@ export async function showTeams() {
   renderTeams();
 }
 
-/** Drivers who raced for a team in saved races, most recent race first. */
 function teamHistory(name) {
   const out = new Map();
   for (const r of state.teamRaces) {
@@ -91,8 +90,7 @@ function renderTeams(message) {
 
 function rosterEditor(t, i) {
   const onRoster = new Set(t.members.map((m) => driverId(m.driver)));
-  // Rosters only take drivers from the Drivers page, so names can't drift apart.
-  const available = state.registry.filter((d) => !onRoster.has(driverId(d.name)));
+  const available = state.drivers.filter((d) => !onRoster.has(driverId(d.name)));
   const history = teamHistory(t.name).filter((d) => !onRoster.has(driverId(d)) && isSavedDriver(d));
   const roleSelect = (attrs, value) => `<select ${attrs}>${Object.entries(ROLES).map(([k, r]) => `<option value="${k}" ${k === value ? 'selected' : ''}>${r.label}</option>`).join('')}</select>`;
   return `<div class="roster-editor">
@@ -111,7 +109,7 @@ function rosterEditor(t, i) {
       </select>
       ${roleSelect(`id="member-role-${i}" aria-label="Role"`, 'core')}
       <button class="btn small" type="button" data-member-add="${i}">Add to roster</button>
-    </div>` : `<p class="muted">${state.registry.length
+    </div>` : `<p class="muted">${state.drivers.length
       ? 'Everyone on the <a href="/drivers">Drivers page</a> is already on this roster.'
       : 'Add drivers on the <a href="/drivers">Drivers page</a> first, then pick them here.'}</p>`}
     ${history.length ? `<div class="suggest">Raced for ${esc(t.name)}: ${history.map((d) => `<button class="btn small" type="button" data-member-quick="${i}" data-driver="${esc(d)}">+ ${esc(d)}</button>`).join('')}</div>` : ''}
@@ -128,7 +126,7 @@ function bindTeams() {
     const t = draft[i];
     if (!isSavedDriver(name)) return renderTeams(`${esc(name)} isn't on the Drivers page yet.`);
     if (t.members.some((m) => driverId(m.driver) === driverId(name))) return renderTeams(`${esc(name)} is already on ${esc(t.name)}.`);
-    const known = state.registry.find((d) => driverId(d.name) === driverId(name));
+    const known = state.drivers.find((d) => driverId(d.name) === driverId(name));
     t.members.push({ driver: known ? known.name : name, role });
     changed();
   };
@@ -159,11 +157,11 @@ function bindTeams() {
     const add = () => addMember(i, document.getElementById(`member-name-${i}`).value, document.getElementById(`member-role-${i}`).value);
     el.addEventListener('click', add);
   });
-  // Fix up roster names that aren't on the Drivers page (e.g. typed in before rosters used a dropdown).
+  // for names typed in before rosters used a dropdown
   app.querySelectorAll('[data-member-register]').forEach((el) => el.addEventListener('click', async () => {
     const name = el.dataset.memberRegister;
     try {
-      state.registry = (await api('drivers', { method: 'PUT', auth: true, body: JSON.stringify({ drivers: [...state.registry, { name, color: '' }] }) })).drivers;
+      state.drivers = (await api('drivers', { method: 'PUT', auth: true, body: JSON.stringify({ drivers: [...state.drivers, { name, color: '' }] }) })).drivers;
       renderTeams(`${esc(name)} added to the Drivers page.`);
     } catch (e) {
       renderTeams(`Couldn't add ${esc(name)}: ${esc(e.message)}`);
@@ -180,6 +178,5 @@ function bindTeams() {
   };
   document.getElementById('add-team').addEventListener('click', addTeam);
   document.getElementById('new-team').addEventListener('keydown', (e) => e.key === 'Enter' && addTeam());
-  // Entering the token retries a save that was waiting for it.
   document.getElementById('token').addEventListener('change', (e) => { token.set(e.target.value.trim()); if (state.teamSave?.kind === 'error') state.saveTeams(); });
 }

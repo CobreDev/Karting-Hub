@@ -2,7 +2,6 @@ import { fmtTime, quantile } from '../lib/race.js';
 import { esc } from './core.js';
 import { swatch, teamColor } from './registry.js';
 
-/** One line per kart in the team color (two-tone for drivers with their own color), with a labeled marker at each driver change. */
 export function lapChart(el, karts, focus) {
   if (!karts.length) { el.innerHTML = '<p class="muted">All karts hidden.</p>'; return; }
   const W = Math.max(320, el.clientWidth);
@@ -22,15 +21,12 @@ export function lapChart(el, karts, focus) {
   const yStep = span > 8000 ? 2000 : span > 4000 ? 1000 : 500;
   const yTicks = [];
   for (let v = Math.ceil(yMin / yStep) * yStep; v <= yMax; v += yStep) yTicks.push(v);
-  // Keep lap labels at least ~40px apart.
   const xStep = [5, 10, 20, 25, 50, 100].find((s) => (s / Math.max(1, xMax - 1)) * (W - m.l - m.r) >= 40) || 100;
   const xTicks = [1];
   for (let v = xStep; v <= xMax; v += xStep) xTicks.push(v);
 
   const series = karts.map((r) => {
-    // Consecutive on-scale laps join into polylines of one style; a driver change continues the line in the new
-    // driver's color. Laps off the top of the scale (pit stops) aren't drawn: a gray dashed bridge joins the
-    // on-scale laps either side. A timing gap (missing laps) breaks the line.
+    // Off-scale laps (pit stops) aren't drawn; a dashed bridge joins the laps either side. Missing laps break the line.
     const runs = [];
     const bridges = [];
     const linked = new Set();
@@ -44,7 +40,6 @@ export function lapChart(el, karts, focus) {
         linked.add(prevValid).add(l);
         cur = null;
       } else if (prevValid) {
-        // Legs touching a slow lap are drawn dotted.
         const off = !!prevValid.flag || !!l.flag;
         const style = `${l.d.key}|${off}`;
         if (cur && cur.style === style) cur.pts.push(l);
@@ -60,20 +55,19 @@ export function lapChart(el, karts, focus) {
       return run.off
         ? `<polyline points="${pts}" fill="none" stroke="${run.color}" stroke-width="1.5" stroke-opacity="0.8" stroke-dasharray="1.5 3" stroke-linecap="round" stroke-linejoin="round"/>`
         : run.d.ownColor
-          // Two-tone dash: long team-color dashes with short driver-color dashes in the gaps (16px pattern).
+          // long team-color dashes, short driver-color dashes in the gaps
           ? `<polyline points="${pts}" fill="none" stroke="${run.d.teamColor}" stroke-width="2.25" stroke-dasharray="9 7" stroke-linejoin="round"/>
              <polyline points="${pts}" fill="none" stroke="${run.color}" stroke-width="2.25" stroke-dasharray="4 12" stroke-dashoffset="5.5" stroke-linejoin="round"/>`
           : `<polyline points="${pts}" fill="none" stroke="${run.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
     }).join('');
     const gaps = bridges.map(([p, q]) => `<polyline class="bridge" points="${pt(p)} ${pt(q)}" fill="none"/>`).join('');
-    // On-scale laps with nothing drawn either side would otherwise be invisible.
+    // an isolated lap has no line to sit on
     const lone = r.laps.filter((l) => l.ms <= yMax && !linked.has(l))
       .map((l) => `<circle cx="${x(l.lap).toFixed(1)}" cy="${y(l.ms).toFixed(1)}" r="2.5" fill="${l.d.color}"/>`).join('');
     const bests = r.chunks.map((c) => `<circle cx="${x(c.best.lap)}" cy="${y(c.best.ms)}" r="${c.d.key === focus?.key ? 5.5 : 4.5}" fill="${c.d.color}" stroke="var(--surface-1)" stroke-width="2"/>`).join('');
     return gaps + lines + lone + bests;
   }).join('');
 
-  // Driver-change markers, one label row per kart under the plot.
   const markers = karts.map((r, row) => r.chunks.map((c, i) => {
     const cx = x(c.from);
     const ly = plotBottom + 14 + row * rowH;

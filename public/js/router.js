@@ -5,14 +5,14 @@ import { showHome } from './pages/home.js';
 import { showRace } from './pages/race.js';
 import { showTeams } from './pages/teams.js';
 
-// Real paths (/r/<race>) rather than #/ links, so the server sees the race and can serve link previews.
+// Real paths rather than #/ routes so the server can render link previews.
 export function navigate(path, { replace = false } = {}) {
   history[replace ? 'replaceState' : 'pushState'](null, '', path);
   route();
 }
 
 export async function route() {
-  // Old #/ links still work: move them to the matching path.
+  // redirect old #/ links
   if (location.hash.startsWith('#/')) history.replaceState(null, '', location.hash.slice(1) || '/');
   const parts = location.pathname.replace(/^\/+/, '').split('/').filter(Boolean).map(decodeURIComponent);
   window.onresize = null;
@@ -29,7 +29,6 @@ export async function route() {
   }
 }
 window.addEventListener('popstate', route);
-// In-app links navigate without a full page load.
 document.addEventListener('click', (e) => {
   const a = e.target.closest('a[href^="/"]');
   if (!a || a.target || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;

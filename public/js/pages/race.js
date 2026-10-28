@@ -1,12 +1,12 @@
-import { missingLaps, computeDrivers, fmtTime, fmtDelta, quantile, DEFAULT_SLOW_FACTOR } from '../../lib/race.js';
+import { missingLaps, computeDrivers, fmtTime, fmtDelta, quantile, DEFAULT_SLOW_FACTOR, fmtRaceDate } from '../../lib/race.js';
 import { lapChart } from '../chart.js';
-import { api, app, esc, fmtClock, fmtDate, shortName, state, token } from '../core.js';
+import { api, app, esc, fmtClock, shortName, state, token } from '../core.js';
 import { avatar, driverAvatar } from '../photos.js';
 import { uploadPreview } from '../preview.js';
-import { applyTeamColors, loadRegistry, swatch, teamLabel } from '../registry.js';
+import { applyTeamColors, loadLists, swatch, teamLabel } from '../registry.js';
 import { navigate } from '../router.js';
 
-/** Width of the lap list's Driver column, sized to the longest name on the team (full on desktop, short on phones). */
+// Size the lap list's driver column to the longest name on the team.
 let measureCtx;
 function driverColumnWidths(kart) {
   measureCtx ||= document.createElement('canvas').getContext('2d');
@@ -15,7 +15,6 @@ function driverColumnWidths(kart) {
     return Math.max(0, ...names.map((n) => measureCtx.measureText(n).width));
   };
   const names = [...new Set(kart.chunks.map((c) => c.d.driver))];
-  // name (semibold when highlighted) + avatar + gap, with a little slack
   const full = Math.ceil(widest(names, 14, 600) + 22 + 8 + 6);
   const short = Math.ceil(widest(names.map(shortName), 12, 600) + 18 + 4 + 2);
   return `--dw:${Math.min(220, Math.max(90, full))}px;--dw-sm:${Math.min(110, Math.max(62, short))}px`;
@@ -23,15 +22,14 @@ function driverColumnWidths(kart) {
 
 const stintText =(e) => e.stints.map((s) => `${s.from}–${s.to}`).join(', ');
 
-/** `/r/:id` race; `/r/:id/:driverKey` highlights a driver; `/r/:id/team/:kart` opens a team's laps. */
+// /r/:id, /r/:id/:driverKey (highlight a driver), /r/:id/team/:kart
 export async function showRace(id, focusKey, teamArg) {
-  const [race] = await Promise.all([api(`races/${encodeURIComponent(id)}`), loadRegistry()]);
+  const [race] = await Promise.all([api(`races/${encodeURIComponent(id)}`), loadLists()]);
   document.title = `${race.name} · Karting Hub`;
   const drivers = computeDrivers(race);
   applyTeamColors(race, drivers);
   const ranked = [...drivers].sort((a, b) => a.best - b.best);
   const teamView = focusKey === 'team';
-  // A driver link highlights that driver; a team link (or no link) just shows a team's laps.
   const focus = teamView ? null : drivers.find((d) => d.key === focusKey) || null;
   const karts = kartRuns(race, drivers);
   const lapKart = (teamView && karts.find((r) => r.k.number === teamArg)) || karts.find((r) => r.k.number === (focus || ranked[0])?.kart) || karts[0];
@@ -40,7 +38,7 @@ export async function showRace(id, focusKey, teamArg) {
 
   const fastest = ranked[0];
   const consistent = [...drivers].filter((d) => d.cleanCount >= 10).sort((a, b) => a.stdev - b.stdev)[0];
-  // Race distance is the most laps any kart completed (karts run at the same time, so don't add them up).
+  // karts race at the same time: race length is the most laps, not the sum
   const lapsOf = (k) => (k.laps.length ? k.laps[k.laps.length - 1].lap : 0);
   const raceLaps = Math.max(0, ...race.karts.map(lapsOf));
   const gaps = race.karts.map((k) => ({ k, miss: missingLaps(k.laps) })).filter((g) => g.miss.length);
@@ -50,7 +48,7 @@ export async function showRace(id, focusKey, teamArg) {
       <div>
         <div><a href="/">← All races</a></div>
         <h1 style="margin-top:6px">${esc(race.name)}</h1>
-        <div class="meta">${esc(fmtDate(race.date))}${race.track ? ` · ${esc(race.track)}` : ''}</div>
+        <div class="meta">${esc(fmtRaceDate(race.date))}${race.track ? ` · ${esc(race.track)}` : ''}</div>
       </div>
       <div class="actions">
         <button class="btn" id="copy-link" type="button">Copy link</button>
@@ -118,7 +116,7 @@ export async function showRace(id, focusKey, teamArg) {
     if (ev.target.closest('[data-order]')) { state.newestFirst = !state.newestFirst; rerender(); }
 
   };
-  // Races saved before previews existed get one the first time an admin opens them.
+  // races saved before link previews existed
   if (state.config.editable && token.get() && !state.images.previews?.[race.id]) uploadPreview(race).catch(() => {});
   document.getElementById('copy-link').addEventListener('click', async (ev) => {
     try { await navigator.clipboard.writeText(location.href); ev.target.textContent = 'Copied!'; }
@@ -165,10 +163,7 @@ function spreadBar(d, lo, hi) {
     <circle cx="${x(d.best)}" cy="9" r="4" fill="${d.color}" stroke="var(--surface-1)" stroke-width="2"/></svg>`;
 }
 
-/**
- * One entry per kart: every lap in order, tagged with who drove it, and grouped into
- * consecutive-driver chunks (stints) for the lap list and the chart's driver-change markers.
- */
+// Per kart: every lap tagged with its driver, grouped into stints.
 function kartRuns(race, drivers) {
   return race.karts.map((k, ki) => {
     const laps = drivers.filter((d) => d.kart === k.number)
@@ -198,9 +193,9 @@ function lapSection(focus, karts, kart) {
   const kartBest = kart.laps.reduce((b, l) => (l.ms < b.ms ? l : b), kart.laps[0]);
   const kartTotal = kart.laps.reduce((a, l) => a + l.ms, 0);
   const med = quantile(kart.laps.map((l) => l.ms), 0.5);
-  // Race Monitor-style bar: length proportional to lap time, capped so one long pit stop doesn't flatten the rest.
+  // cap the bar scale so one long pit stop doesn't flatten every other bar
   const scaleMax = Math.min(Math.max(...kart.laps.map((l) => l.ms)), med * 3.2);
-  // Δ best is against that driver's own best; Δ prev stays within a stint (no comparing with the last driver's pit lap).
+  // Δ prev restarts at each driver change
   const rows = kart.chunks.flatMap((c) => c.laps.map((l, i) => {
     const p = c.laps[i - 1];
     return { ...l, c, firstOfStint: i === 0, prev: p && p.lap === l.lap - 1 ? p.ms : null };

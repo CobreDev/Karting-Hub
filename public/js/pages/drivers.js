@@ -4,9 +4,8 @@ import { api, app, esc, state, token } from '../core.js';
 import { roleBadge } from './teams.js';
 import { avatar, bindPhotoPickers, personAvatar, photoButtons } from '../photos.js';
 import { colorChanges, refreshPreviews } from '../preview.js';
-import { loadRegistry, swatch } from '../registry.js';
+import { loadLists, swatch } from '../registry.js';
 
-/** "Team Apex OWNER" style badges for every roster the driver is on. */
 function driverTeams(name) {
   const rows = state.teams.flatMap((t) => t.members.filter((m) => driverId(m.driver) === driverId(name)).map((m) => ({ t, m })))
     .sort((a, b) => Number(ROLES[b.m.role].bound) - Number(ROLES[a.m.role].bound));
@@ -15,7 +14,6 @@ function driverTeams(name) {
     : '<span class="muted">—</span>';
 }
 
-/** Editable version for the Drivers page: each team with a role picker and ✕, plus "Add to team…". */
 function driverTeamEditor(name) {
   const rows = state.teams.filter((t) => t.members.some((m) => driverId(m.driver) === driverId(name)));
   const roleOf = (t) => t.members.find((m) => driverId(m.driver) === driverId(name)).role;
@@ -35,7 +33,6 @@ function driverTeamEditor(name) {
   </div>`;
 }
 
-/** Applies a roster change made on the Drivers page and saves the team list (same rules as the Teams page). */
 async function updateRosters(change, done) {
   const next = state.teams.map((t) => ({ ...t, members: t.members.map((m) => ({ ...m })) }));
   change(next);
@@ -51,18 +48,18 @@ async function updateRosters(change, done) {
 
 export async function showDrivers() {
   document.title = 'Drivers · Karting Hub';
-  const [races] = await Promise.all([api('races'), loadRegistry()]);
-  state.driverDraft = state.registry.map((d) => ({ ...d }));
+  const [races] = await Promise.all([api('races'), loadLists()]);
+  state.driverDraft = state.drivers.map((d) => ({ ...d }));
   state.driverRaces = races;
   state.driverSave = null;
   state.saveDrivers = autosaver({
     path: 'drivers',
     body: () => ({ drivers: state.driverDraft }),
     onSaved: (res) => {
-      // Photo buttons appear once a new driver is on the saved list.
-      const before = state.registry.length;
-      refreshPreviews({ drivers: colorChanges(state.registry, res.drivers) });
-      state.registry = res.drivers;
+      // photo uploads need the driver to exist on the server
+      const before = state.drivers.length;
+      refreshPreviews({ drivers: colorChanges(state.drivers, res.drivers) });
+      state.drivers = res.drivers;
       if (res.drivers.length !== before && location.pathname === '/drivers') renderDrivers();
     },
     status: (kind, text) => { state.driverSave = { kind, text }; showSaveStatus(kind, text); },
@@ -84,8 +81,7 @@ function renderDrivers(message) {
         <tbody>${state.driverDraft.map((d, i) => {
           const rs = racesFor(d.name);
           const ring = d.color || 'var(--border)';
-          // Photos can only be added once the driver is saved (the upload is keyed by their saved name).
-          const saved = state.registry.some((o) => driverId(o.name) === driverId(d.name));
+          const saved = state.drivers.some((o) => driverId(o.name) === driverId(d.name));
           return `<tr>
           <td><div class="driver-cell driver-name">
             ${personAvatar(d.name, 36, ring)}
@@ -111,7 +107,7 @@ function renderDrivers(message) {
   app.querySelectorAll('[data-dt-add]').forEach((el) => el.addEventListener('change', () => {
     if (!el.value) return;
     const name = el.dataset.dtAdd;
-    // First team defaults to Core; once they're bound somewhere, further teams default to Rotating.
+    // core on the first team, rotating after that (owner/core is one team only)
     const bound = state.teams.some((t) => t.members.some((m) => driverId(m.driver) === driverId(name) && ROLES[m.role].bound));
     updateRosters((teams) => teams.find((t) => t.name === el.value).members.push({ driver: name, role: bound ? 'rotating' : 'core' }), rosterDone);
   }));
@@ -155,6 +151,5 @@ function renderDrivers(message) {
   };
   document.getElementById('add-driver').addEventListener('click', add);
   document.getElementById('new-driver').addEventListener('keydown', (e) => e.key === 'Enter' && add());
-  // Entering the token retries a save that was waiting for it.
   document.getElementById('token').addEventListener('change', (e) => { token.set(e.target.value.trim()); if (state.driverSave?.kind === 'error') state.saveDrivers(); });
 }
