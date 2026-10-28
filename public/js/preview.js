@@ -17,14 +17,15 @@ const loadImg = async (url) => {
   }
 };
 
-// Hairline light theme: ink on paper, rules instead of boxes, the fastest lap as the biggest number.
 // Cards saved before this date use an older design; an admin opening the race redraws them.
-export const CARD_DESIGN = Date.parse('2026-10-28T03:30Z');
-const INK = '#161614', SECONDARY = '#55534d', MUTED = '#6d6b64', RULE = '#dcdad2', PAPER = '#f6f5f1', SURFACE = '#efeee9';
+export const CARD_DESIGN = Date.parse('2026-10-28T03:33Z');
+
+// Hairline dark theme: rules instead of boxes, the fastest lap as the biggest number, a checkered edge.
+const INK = '#ecebe6', SECONDARY = '#bdbbb2', MUTED = '#8f8d85', RULE = '#2f2e2b', PAPER = '#0f0f0e', SURFACE = '#222220';
 
 async function drawPreviewCard(race) {
   const sum = raceSummary(race);
-  const W = 1200, H = 630, PAD = 64, maxW = W - PAD * 2;
+  const W = 1200, H = 630, PAD = 64, STRIP = 60, maxW = W - STRIP - PAD * 2;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -39,7 +40,7 @@ async function drawPreviewCard(race) {
     if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
     return w;
   };
-  const lightColor = (hex) => teamShades(hex, 1, 'light')[0];
+  const themeColor = (hex) => teamShades(hex, 1, 'dark')[0];
   const initialsOf = (name) => String(name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   const fit = (str, max) => {
     if (ctx.measureText(str).width <= max) return str;
@@ -63,8 +64,12 @@ async function drawPreviewCard(race) {
   };
 
   ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H);
+  const SQ = 30;
+  ctx.fillStyle = INK;
+  for (let y = 0; y < H; y += SQ) for (let c = 0; c < 2; c++) if ((y / SQ + c) % 2 === 0) ctx.fillRect(W - STRIP + c * SQ, y, SQ, SQ);
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if ((i + j) % 2 === 0) ctx.fillRect(PAD + i * 6, 62 + j * 6, 6, 6);
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  text('Karting Hub', PAD, 84, { weight: 600, size: 24, color: MUTED });
+  text('Karting Hub', PAD + 36, 84, { weight: 600, size: 24, color: MUTED });
 
   // title block sits on the first rule, so a one-line name leaves the space above it
   const RULE1 = 318;
@@ -85,39 +90,56 @@ async function drawPreviewCard(race) {
   rule(RULE1);
 
   const karts = race.karts || [];
-  const lapCount = Math.max(0, ...karts.map((k) => (k.laps.length ? k.laps[k.laps.length - 1].lap : 0)));
-  const longest = Math.max(0, ...karts.map((k) => k.laps.reduce((a, l) => a + l.ms, 0)));
+  const lapsOf = (k) => (k.laps.length ? k.laps[k.laps.length - 1].lap : 0);
+  const totalOf = (k) => k.laps.reduce((a, l) => a + l.ms, 0);
+  const longest = Math.max(0, ...karts.map(totalOf));
   const hrs = longest / 3600000;
   // 1:59:01 -> "2 h", 1:30:00 -> "1.5 h"
   const hours = hrs < 1 ? `${Math.round(longest / 60000)} min` : Math.abs(hrs - Math.round(hrs)) < 0.1 ? `${Math.round(hrs)} h` : `${hrs.toFixed(1)} h`;
+  const teamImgs = await Promise.all(karts.map((k) => loadImg(k.team && photoUrl('teams', k.team))));
   const LABEL = RULE1 + 54, FIG = LABEL + 72, SUB = FIG + 46;
-  const figure = (label, value, x) => {
-    text(label, x, LABEL, { weight: 500, size: 24, color: MUTED });
-    return text(value, x, FIG, { weight: 650, size: 68, track: -0.02 });
+  const label = (str, x) => text(str, x, LABEL, { weight: 500, size: 24, color: MUTED });
+  const figure = (str, x) => text(str, x, FIG, { weight: 650, size: 68, track: -0.02 });
+  // a photo or initials, a bold name and a quieter detail, all on the line under a figure
+  const byline = (img, color, second, name, detail, x, max) => {
+    disc(img, x + 17, SUB - 9, 17, color, name, second);
+    ctx.font = font(600, 26);
+    const nw = text(fit(name, max - 46), x + 46, SUB, { weight: 600, size: 26 });
+    ctx.font = font(400, 26);
+    text(fit(detail, max - 46 - nw), x + 46 + nw, SUB, { size: 26, color: SECONDARY });
   };
 
+  // winner: most laps, then the shorter total time (same rule as the race page)
+  const wi = karts.reduce((b, k, i) => (b < 0 || lapsOf(k) > lapsOf(karts[b]) || (lapsOf(k) === lapsOf(karts[b]) && totalOf(k) < totalOf(karts[b])) ? i : b), -1);
+  if (wi >= 0) {
+    const w = karts[wi];
+    const name = w.team || `Kart #${w.number}`;
+    label('Winner', PAD);
+    disc(teamImgs[wi], PAD + 24, FIG - 18, 24, themeColor(teamColor(w, wi)), name);
+    // long team names step down in size before they get cut off
+    let size = 44;
+    for (; size > 32; size -= 2) { ctx.font = font(700, size); if (ctx.measureText(name).width <= 380) break; }
+    text(fit(name, 380), PAD + 62, FIG - 4, { weight: 700, size, track: -0.015 });
+    ctx.font = font(400, 26);
+    text(fit(`${lapsOf(w)} laps${w.team ? ` · #${w.number}` : ''}`, 420), PAD, SUB, { size: 26, color: SECONDARY });
+  }
+  const FX = PAD + 480;
   if (sum.fastest) {
     const f = sum.fastest;
     const ki = karts.findIndex((k) => k.number === f.kart);
-    const tColor = lightColor(teamColor(karts[ki] || {}, Math.max(0, ki)));
+    const tColor = themeColor(teamColor(karts[ki] || {}, Math.max(0, ki)));
     const own = ownColors().get(driverId(f.driver));
-    figure('Fastest lap', fmtTime(f.ms), PAD);
-    const dImg = await loadImg(photoUrl('drivers', f.driver));
-    disc(dImg, PAD + 17, SUB - 9, 17, own ? lightColor(own) : tColor, f.driver, own && tColor);
-    ctx.font = font(600, 26);
-    const name = fit(f.driver, 300);
-    const nw = text(name, PAD + 46, SUB, { weight: 600, size: 26 });
-    ctx.font = font(400, 26);
-    text(fit(` · lap ${f.lap}`, 420 - nw), PAD + 46 + nw, SUB, { size: 26, color: SECONDARY });
+    label('Fastest lap', FX);
+    figure(fmtTime(f.ms), FX);
+    byline(await loadImg(photoUrl('drivers', f.driver)), own ? themeColor(own) : tColor, own && tColor, f.driver, ` · lap ${f.lap}`, FX, 320);
   }
-  const cols = [['Laps', String(lapCount)], ['Duration', hours], ['Drivers', String(sum.drivers.length)]];
-  cols.forEach(([label, value], i) => figure(label, value, PAD + 520 + i * 210));
+  label('Duration', FX + 340);
+  figure(hours, FX + 340);
 
   const RULE2 = SUB + 34;
   rule(RULE2);
   const ty = RULE2 + 62;
   let tx = PAD;
-  const teamImgs = await Promise.all(karts.map((k) => loadImg(k.team && photoUrl('teams', k.team))));
   karts.forEach((k, i) => {
     ctx.font = font(650, 28);
     const name = fit(k.team || `Kart #${k.number}`, 320);
@@ -125,8 +147,8 @@ async function drawPreviewCard(race) {
     ctx.font = font(400, 24);
     const num = k.team ? `#${k.number}` : '';
     const w = 50 + nameW + (num ? 10 + ctx.measureText(num).width : 0);
-    if (tx + w > W - PAD) return; // more teams than fit: the rest are left off the card
-    disc(teamImgs[i], tx + 18, ty - 10, 18, lightColor(teamColor(k, i)), name);
+    if (tx + w > W - STRIP - PAD) return; // more teams than fit: the rest are left off the card
+    disc(teamImgs[i], tx + 18, ty - 10, 18, themeColor(teamColor(k, i)), name);
     text(name, tx + 50, ty, { weight: 650, size: 28 });
     if (num) text(num, tx + 60 + nameW, ty, { size: 24, color: MUTED });
     tx += w + 40;

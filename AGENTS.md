@@ -51,7 +51,7 @@ different transponder. Stints are `[{ driver, toLap }]` in order, with `toLap: n
 | `public/js/registry.js` | Loads the driver and team lists; team colors; per-theme color variables. |
 | `public/js/photos.js` | Avatars, initials badges, browser-side resizing, upload controls. |
 | `public/js/chart.js` | The lap-time SVG chart. |
-| `public/js/preview.js` | Draws the 1200x630 link-preview card on a canvas and re-uploads it when a photo or color it uses changes. Uses the Hairline light palette; bump `CARD_DESIGN` when the card's look changes so saved cards get redrawn. |
+| `public/js/preview.js` | Draws the 1200x630 link-preview card on a canvas and re-uploads it when a photo or color it uses changes. Uses the Hairline dark palette with a checkered edge; bump `CARD_DESIGN` when the card's look changes so saved cards get redrawn. |
 | `public/js/autosave.js` | Autosave for the Drivers and Teams pages. |
 | `public/js/pages/` | One module per page: home, race, editor, drivers, teams. |
 
