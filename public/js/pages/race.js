@@ -6,15 +6,27 @@ import { uploadPreview } from '../preview.js';
 import { applyTeamColors, loadLists, swatch, teamLabel } from '../registry.js';
 import { navigate } from '../router.js';
 
-const helpButton = '<button class="help" type="button" popovertarget="stdev-help" aria-label="What does this mean?">?</button>';
-const STDEV_HELP = `<div id="stdev-help" class="popover" popover>
-  <h3>Consistency (std dev)</h3>
+const helpButton = (id) => `<button class="help" type="button" popovertarget="${id}" aria-label="What does this mean?">?</button>`;
+const popup = (id, title, body) => `<div id="${id}" class="popover" popover>
+  <h3>${title}</h3>${body}
+  <button class="btn small" type="button" popovertarget="${id}" popovertargetaction="hide">Close</button>
+</div>`;
+const HELP = popup('stdev-help', 'Consistency (std dev)', `
   <p>The standard deviation of a driver's clean laps, with pit stops and slow laps left out. It's the typical
   distance between one of their laps and their own average.</p>
   <p>For example, ±0.450 means most clean laps were within about half a second of the driver's average. Smaller is more
-  consistent. It says nothing about speed: a slow, steady driver can score better than a fast, erratic one.</p>
-  <button class="btn small" type="button" popovertarget="stdev-help" popovertargetaction="hide">Close</button>
-</div>`;
+  consistent. It says nothing about speed: a slow, steady driver can score better than a fast, erratic one.</p>`)
+  + popup('spread-help', 'Pace spread', `
+  <svg class="spread-example" width="240" height="36" viewBox="0 0 240 36" aria-hidden="true">
+    <line x1="80" x2="210" y1="12" y2="12" stroke="var(--text-secondary)" stroke-width="6" stroke-linecap="round" opacity="0.45"/>
+    <line x1="135" x2="135" y1="5" y2="19" stroke="var(--text-secondary)" stroke-width="2"/>
+    <circle cx="22" cy="12" r="4.5" fill="var(--text-secondary)" stroke="var(--surface-1)" stroke-width="2"/>
+    <text x="22" y="33" text-anchor="middle">best</text><text x="80" y="33" text-anchor="middle">10th</text>
+    <text x="135" y="33" text-anchor="middle">median</text><text x="210" y="33" text-anchor="middle">90th</text>
+  </svg>
+  <p>The dot is the driver's best lap. The bar covers the middle 80% of their clean laps (10th to 90th
+  percentile) and the tick marks the median.</p>
+  <p>Every driver is drawn on the same scale, so further left is faster and a shorter bar is more consistent.</p>`);
 
 // Size the lap list's driver column to the longest name on the team.
 let measureCtx;
@@ -80,7 +92,7 @@ export async function showRace(id, focusKey, teamArg) {
       <dl class="figures">
         ${fastest ? `<div><dt>Fastest lap</dt><dd class="figure">${fmtTime(fastest.best)}</dd>
           <dd>${esc(fastest.driver)}, lap ${fastest.bestLapNo}</dd></div>` : ''}
-        ${consistent ? `<div><dt>Most consistent</dt><dd class="figure">±${(consistent.stdev / 1000).toFixed(3)} ${helpButton}</dd>
+        ${consistent ? `<div><dt>Most consistent</dt><dd class="figure">±${(consistent.stdev / 1000).toFixed(3)} ${helpButton('stdev-help')}</dd>
           <dd>${esc(consistent.driver)}</dd></div>` : ''}
         <div><dt>Laps</dt><dd class="figure">${raceLaps}</dd>
           <dd>${race.karts.length > 1 && race.karts.length <= 4
@@ -107,7 +119,7 @@ export async function showRace(id, focusKey, teamArg) {
 
     <section class="section" id="focus">${lapSection(focus, karts, lapKart)}</section>
 
-    ${STDEV_HELP}
+    ${HELP}
     ${gaps.length ? `<p class="footnote">No timing data for ${gaps.map((g) => `#${esc(g.k.number)} lap${g.miss.length > 1 ? 's' : ''} ${g.miss.join(', ')}`).join('; ')}.</p>` : ''}
   `;
 
@@ -126,7 +138,8 @@ export async function showRace(id, focusKey, teamArg) {
   });
   app.onclick = (ev) => {
     // browsers without the popover API (iOS before 17) get the text in an alert instead
-    if (ev.target.closest('[popovertarget]') && !HTMLElement.prototype.togglePopover) alert(document.getElementById('stdev-help').innerText);
+    const help = ev.target.closest('[popovertarget]');
+    if (help && !HTMLElement.prototype.togglePopover) alert(document.getElementById(help.getAttribute('popovertarget')).innerText);
     const pick = ev.target.closest('[data-focus]');
     if (pick) navigate(`/r/${encodeURIComponent(race.id)}/${encodeURIComponent(pick.dataset.focus)}`);
     const rerender = () => (document.getElementById('focus').innerHTML = lapSection(focus, karts, lapKart));
@@ -153,8 +166,8 @@ function leaderboard(ranked, focus) {
     <thead><tr>
       <th>#</th><th>Driver</th><th class="hide-sm">Team</th><th class="num hide-sm">Laps</th>
       <th class="num">Best</th><th class="num">Gap</th><th class="num hide-sm">Best 5 avg</th>
-      <th class="num">Avg</th><th class="num hide-sm">Median</th><th class="num hide-sm">Std dev ${helpButton}</th>
-      <th class="hide-sm">Pace spread <span title="dot = best lap, bar = 10th–90th percentile of clean laps, tick = median">ⓘ</span></th>
+      <th class="num">Avg</th><th class="num hide-sm">Median</th><th class="num hide-sm">Std dev ${helpButton('stdev-help')}</th>
+      <th class="hide-sm">Pace spread ${helpButton('spread-help')}</th>
     </tr></thead>
     <tbody>${ranked.map((d, i) => `
       <tr class="clickable ${d.key === focus?.key ? 'focused' : ''}" data-focus="${esc(d.key)}">
