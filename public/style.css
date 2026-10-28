@@ -357,13 +357,14 @@ label.field, div.field { display: flex; flex-direction: column; gap: 4px; font-s
   .roster-member { flex-wrap: nowrap; }
   .roster-member .driver-cell { min-width: 0; flex: 1; }
 
-  .rm-cols, .rm-row { grid-template-columns: 24px var(--dw-sm, 62px) minmax(0, 1fr) 64px 58px; column-gap: 5px; padding-left: 4px; padding-right: 4px; }
+  .rm-cols, .rm-row { grid-template-columns: 26px 20px var(--dw-sm, 62px) minmax(0, 1fr) 60px 56px; column-gap: 5px; padding-left: 2px; padding-right: 2px; }
   .rm-driver { font-size: 12px; gap: 4px; }
-  .rm-driver .avatar { width: 18px !important; height: 18px !important; font-size: 7px !important; border-width: 1.5px; }
+  .rm-driver .avatar { display: none; }
   .rm-driver .dn-full, .rm-time .t-full { display: none; }
   .rm-driver .dn-short, .rm-time .t-short { display: inline; }
   .rm-note { display: none; }
-  .rm-lap, .rm-pos { font-size: 16px; }
+  .rm-lap { font-size: 15px; }
+  .rm-pos { font-size: 13px; }
   .rm-time { font-size: 16px; }
   .rm-delta { font-size: 12px; }
 }

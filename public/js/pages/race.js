@@ -16,8 +16,8 @@ function driverColumnWidths(kart) {
   };
   const names = [...new Set(kart.chunks.map((c) => c.d.driver))];
   const full = Math.ceil(widest(names, 14, 600) + 22 + 8 + 6);
-  const short = Math.ceil(widest(names.map(shortName), 12, 600) + 18 + 4 + 2);
-  return `--dw:${Math.min(220, Math.max(90, full))}px;--dw-sm:${Math.min(110, Math.max(62, short))}px`;
+  const short = Math.ceil(widest(names.map(shortName), 12, 600) + 4); // no avatar on phones
+  return `--dw:${Math.min(220, Math.max(90, full))}px;--dw-sm:${Math.min(96, Math.max(44, short))}px`;
 }
 
 const stintText =(e) => e.stints.map((s) => `${s.from}–${s.to}`).join(', ');
@@ -32,7 +32,7 @@ export async function showRace(id, focusKey, teamArg) {
   const teamView = focusKey === 'team';
   const focus = teamView ? null : drivers.find((d) => d.key === focusKey) || null;
   const karts = kartRuns(race, drivers);
-  const lapKart = (teamView && karts.find((r) => r.k.number === teamArg)) || karts.find((r) => r.k.number === (focus || ranked[0])?.kart) || karts[0];
+  const lapKart = (teamView && karts.find((r) => r.k.number === teamArg)) || (focus && karts.find((r) => r.k.number === focus.kart)) || karts[0];
   if (state.raceId !== id) { state.hidden = new Set(); state.raceId = id; }
   state.slowFactor = race.slowFactor;
 
@@ -137,7 +137,7 @@ function leaderboard(ranked, focus) {
     <thead><tr>
       <th>#</th><th>Driver</th><th class="hide-sm">Team</th><th class="num hide-sm">Laps</th>
       <th class="num">Best</th><th class="num">Gap</th><th class="num hide-sm">Best 5 avg</th>
-      <th class="num">Avg</th><th class="num hide-sm">Median</th><th class="num hide-sm">Std dev</th>
+      <th class="num">Avg</th><th class="num hide-sm">Median</th><th class="num hide-sm" title="Standard deviation of clean laps: how far they typically are from the average">Std dev</th>
       <th class="hide-sm">Pace spread <span title="dot = best lap, bar = 10th–90th percentile of clean laps, tick = median">ⓘ</span></th>
     </tr></thead>
     <tbody>${ranked.map((d, i) => `
@@ -229,7 +229,7 @@ function lapSection(focus, karts, kart) {
         </table>
       </div>
       <div class="rm-toolbar"><button class="btn small" type="button" data-order>${state.newestFirst ? 'Oldest first' : 'Newest first'}</button></div>
-      <div class="rm-cols"><span>Lap</span><span class="hide-sm">Pos.</span><span>Driver</span><span>Time</span><span class="num">Δ best</span><span class="num">Δ prev</span><span class="hide-sm"></span></div>
+      <div class="rm-cols"><span>Lap</span><span>Pos</span><span>Driver</span><span>Time</span><span class="num">Δ best</span><span class="num">Δ prev</span><span class="hide-sm"></span></div>
       ${rows.map((l) => {
         const isBest = l.lap === l.c.best.lap;
         const dPrev = l.prev == null ? null : l.ms - l.prev;
@@ -237,7 +237,7 @@ function lapSection(focus, karts, kart) {
         const handover = state.newestFirst ? l.lap === l.c.to && l.c !== kart.chunks[kart.chunks.length - 1] : l.firstOfStint && l.c !== kart.chunks[0];
         return `<div class="rm-row ${l.c.d.key === focus?.key ? 'focused' : ''} ${handover ? 'handover' : ''}" style="--stint-color:${l.c.d.color}" ${l.lap === l.c.from && l.c.d.key === focus?.key ? 'id="focus-start"' : ''}>
           <span class="rm-lap">${l.lap}</span>
-          <span class="rm-pos hide-sm">${l.pos ?? ''}</span>
+          <span class="rm-pos">${l.pos ?? ''}</span>
           <span class="rm-driver">${driverAvatar(l.c.d, 22)}<span class="dn-full">${esc(l.c.d.driver)}</span><span class="dn-short">${esc(shortName(l.c.d.driver))}</span></span>
           <span class="rm-time ${isBest ? 'best-time' : ''}"><span class="t-full">${fmtClock(l.ms)}</span><span class="t-short">${fmtTime(l.ms)}</span>
             <i class="rm-bar ${kind}" style="width:${Math.min(100, (l.ms / scaleMax) * 100).toFixed(1)}%"></i></span>

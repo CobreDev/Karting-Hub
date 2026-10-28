@@ -26,7 +26,7 @@ export function lapChart(el, karts, focus) {
   for (let v = xStep; v <= xMax; v += xStep) xTicks.push(v);
 
   const series = karts.map((r) => {
-    // Off-scale laps (pit stops) aren't drawn; a dashed bridge joins the laps either side. Missing laps break the line.
+    // Off-scale laps (pit stops, long yellows) aren't drawn; a dashed bridge joins the laps either side. Missing laps break the line.
     const runs = [];
     const bridges = [];
     const linked = new Set();
@@ -77,7 +77,7 @@ export function lapChart(el, karts, focus) {
   }).join('')).join('');
 
   el.innerHTML = `
-    <div class="legend"><span>● Best lap</span><span>│ Driver change</span>${karts.some((r) => r.chunks.some((c) => c.d.ownColor)) ? '<span>Two-tone: driver and team color</span>' : ''}<span>Dotted: slow lap</span><span>Gray dashes: pit stop</span></div>
+    <div class="legend"><span>● Best lap</span><span>│ Driver change</span>${karts.some((r) => r.chunks.some((c) => c.d.ownColor)) ? '<span>Two-tone: driver and team color</span>' : ''}<span>Dotted: slow lap</span><span>Gray dashes: skips laps too long for the scale, like pit stops</span></div>
     <svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Lap time by lap number for each kart">
       ${yTicks.map((v) => `<line class="gridline" x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}"/>
         <text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${fmtTime(v).replace(/\.000$|0+$/, '').replace(/\.$/, '')}</text>`).join('')}
