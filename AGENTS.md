@@ -30,7 +30,7 @@ renders (`computeDrivers`, `applyTeamColors`) and are never stored.
 
 Drivers and teams are referenced by name everywhere and matched with `driverId()` (trimmed, lowercased).
 `drivers.json` holds personal colors; `teams.json` holds team colors and rosters. Because of that, renaming
-goes through `renameDriver()` on the server, which rewrites races, rosters and the photo in one request. Photos are keyed by
+goes through `renameDriver()` / `renameTeam()` on the server, which rewrite races, rosters and the photo in one request. On the Drivers and Teams pages the name itself is the rename control (`public/js/rename.js`). Photos are keyed by
 `imageId(name)`. A saved team color takes precedence over the older per-race `kart.color`.
 
 Roster roles are in `ROLES`: `owner` and `core` bind a driver to one team, `rotating` doesn't. The browser

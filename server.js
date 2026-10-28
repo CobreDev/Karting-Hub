@@ -132,15 +132,11 @@ async function renameDriver(res, from, to) {
   driver.name = to;
   await writeJson(DRIVERS, { drivers: drivers.sort((a, b) => a.name.localeCompare(b.name)) });
 
-  let races = 0;
-  for (const f of (await readdir(RACES)).filter((f) => f.endsWith('.json'))) {
-    const race = JSON.parse(await readFile(path.join(RACES, f), 'utf8'));
+  const races = await rewriteRaces((k) => {
     let changed = false;
-    for (const k of race.karts || []) for (const s of k.stints || []) {
-      if (driverId(s.driver) === driverId(from)) { s.driver = to; changed = true; }
-    }
-    if (changed) { await writeJson(path.join(RACES, f), race); races++; }
-  }
+    for (const s of k.stints || []) if (driverId(s.driver) === driverId(from)) { s.driver = to; changed = true; }
+    return changed;
+  });
 
   const teams = normalizeTeams(JSON.parse(await readFile(TEAMS, 'utf8').catch(() => '{"teams":[]}')).teams);
   for (const t of teams) for (const m of t.members) if (driverId(m.driver) === driverId(from)) m.driver = to;
@@ -148,6 +144,35 @@ async function renameDriver(res, from, to) {
 
   if (imageId(from) !== imageId(to)) await rename(imageFile('drivers', imageId(from)), imageFile('drivers', imageId(to))).catch(() => {});
   return send(res, 200, { ok: true, races });
+}
+
+async function renameTeam(res, from, to) {
+  if (!to || to.length > 60) return send(res, 400, { error: 'the new name needs 1 to 60 characters' });
+  const teams = normalizeTeams(JSON.parse(await readFile(TEAMS, 'utf8').catch(() => '{"teams":[]}')).teams);
+  const team = teams.find((t) => driverId(t.name) === driverId(from));
+  if (!team) return send(res, 404, { error: `${from} isn't on the team list` });
+  if (driverId(from) !== driverId(to) && teams.some((t) => driverId(t.name) === driverId(to))) {
+    return send(res, 409, { error: `there is already a team called ${to}` });
+  }
+  team.name = to;
+  await writeJson(TEAMS, { teams: teams.sort((a, b) => a.name.localeCompare(b.name)) });
+  const races = await rewriteRaces((k) => {
+    if (driverId(k.team || '') !== driverId(from)) return false;
+    k.team = to;
+    return true;
+  });
+  if (imageId(from) !== imageId(to)) await rename(imageFile('teams', imageId(from)), imageFile('teams', imageId(to))).catch(() => {});
+  return send(res, 200, { ok: true, races });
+}
+
+// Applies change(kart) to every saved race and returns how many races it changed.
+async function rewriteRaces(change) {
+  let count = 0;
+  for (const f of (await readdir(RACES)).filter((f) => f.endsWith('.json'))) {
+    const race = JSON.parse(await readFile(path.join(RACES, f), 'utf8'));
+    if ((race.karts || []).map(change).some(Boolean)) { await writeJson(path.join(RACES, f), race); count++; }
+  }
+  return count;
 }
 
 async function writeJson(file, data) {
@@ -208,6 +233,17 @@ async function api(req, res, parts) {
   if (parts[1] === 'config') return send(res, 200, { editable: !!TOKEN });
   if (parts[1] === 'auth') return checkAuth(req, res) && send(res, 200, { ok: true });
   if (parts[1] === 'images') return images(req, res, parts[2], parts[3]);
+  if ((parts[1] === 'drivers' || parts[1] === 'teams') && parts[2] === 'rename') {
+    if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+    if (!checkAuth(req, res)) return;
+    let body;
+    try {
+      body = JSON.parse(await readBody(req));
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.status ? e.message : 'invalid JSON' });
+    }
+    return (parts[1] === 'teams' ? renameTeam : renameDriver)(res, String(body?.from ?? '').trim(), String(body?.to ?? '').trim());
+  }
   if (parts[1] === 'teams') {
     if (req.method === 'GET') {
       const stored = JSON.parse(await readFile(TEAMS, 'utf8').catch(() => '{"teams":[]}'));
@@ -232,17 +268,6 @@ async function api(req, res, parts) {
       .sort((a, b) => a.name.localeCompare(b.name));
     await writeJson(TEAMS, { teams });
     return send(res, 200, { ok: true, teams });
-  }
-  if (parts[1] === 'drivers' && parts[2] === 'rename') {
-    if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
-    if (!checkAuth(req, res)) return;
-    let body;
-    try {
-      body = JSON.parse(await readBody(req));
-    } catch (e) {
-      return send(res, e.status || 400, { error: e.status ? e.message : 'invalid JSON' });
-    }
-    return renameDriver(res, String(body?.from ?? '').trim(), String(body?.to ?? '').trim());
   }
   if (parts[1] === 'drivers') {
     if (req.method === 'GET') return send(res, 200, JSON.parse(await readFile(DRIVERS, 'utf8').catch(() => '{"drivers":[]}')));

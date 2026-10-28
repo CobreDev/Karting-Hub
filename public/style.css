@@ -194,6 +194,12 @@ tbody tr.clickable:hover, tbody tr.focused { background: var(--surface-2); }
 .col-color { width: 76px; }
 .col-kart { width: 110px; }
 .driver-cell { display: flex; align-items: center; gap: 9px; font-weight: 600; white-space: nowrap; }
+.name-edit {
+  padding: 0; font: inherit; font-weight: 700; color: inherit; text-align: left; cursor: text; background: none; border: 0;
+  text-decoration: underline dotted transparent; text-underline-offset: 4px;
+}
+.name-edit:hover { text-decoration-color: var(--text-muted); }
+.driver-cell .name-input { font: inherit; font-weight: 700; width: min(220px, 100%); height: 30px; padding: 0 7px; }
 .team-sub { display: block; white-space: normal; font-size: 12px; font-weight: 400; color: var(--text-muted); }
 .show-sm { display: none; }
 .best-time { color: var(--good); font-weight: 650; }

@@ -109,6 +109,7 @@ API, all JSON. Writes need `Authorization: Bearer <ADMIN_TOKEN>`.
 | `GET /api/drivers`, `PUT /api/drivers` | driver list with colors |
 | `POST /api/drivers/rename` | rename a driver in the list, every race, rosters and photo |
 | `GET /api/teams`, `PUT /api/teams` | team list with colors and rosters |
+| `POST /api/teams/rename` | rename a team in the list, every race and its photo |
 | `GET /api/images`, `PUT`/`DELETE /api/images/:kind/:id` | photos and preview cards |
 | `GET /api/config`, `GET /api/health` | whether editing is enabled; health check |
 

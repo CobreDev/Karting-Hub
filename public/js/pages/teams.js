@@ -4,6 +4,7 @@ import { api, app, esc, state, token } from '../core.js';
 import { avatar, bindPhotoPickers, initials, personAvatar, photoButtons } from '../photos.js';
 import { colorChanges, refreshPreviews } from '../preview.js';
 import { driverRing, isSavedDriver, loadLists, swatch, teamColor } from '../registry.js';
+import { bindNameEdits, nameButton } from '../rename.js';
 
 export async function showTeams() {
   document.title = 'Teams · Karting Hub';
@@ -64,7 +65,7 @@ function renderTeams(message) {
           return `<tr>
             <td><div class="driver-cell driver-name">
               ${avatar('teams', t.name, 36, ring, `<span class="avatar placeholder" style="--ring:${ring};width:36px;height:36px;font-size:13px">${initials(t.name)}</span>`)}
-              <b>${esc(t.name)}</b></div></td>
+              ${edit ? nameButton(t.name, i) : `<b>${esc(t.name)}</b>`}</div></td>
             <td>${edit
               ? `<span class="driver-color ${t.color ? '' : 'unset'}"><input type="color" data-team-color="${i}" value="${t.color || '#8e8d86'}" aria-label="Color for ${esc(t.name)}"></span>`
               : t.color ? `<span class="swatch large" style="background:${t.color}"></span>` : '<span class="muted">—</span>'}</td>
@@ -130,6 +131,25 @@ function bindTeams() {
     t.members.push({ driver: known ? known.name : name, role });
     changed();
   };
+  bindNameEdits(async (i, to) => {
+    const from = draft[i].name;
+    if (!to) return renderTeams();
+    if (draft.some((o, j) => j !== i && driverId(o.name) === driverId(to))) return renderTeams(`There is already a team called ${esc(to)}.`);
+    // not on the server yet, so nothing else refers to the old name
+    if (!state.teams.some((o) => driverId(o.name) === driverId(from))) { draft[i].name = to; return changed(); }
+    token.set(document.getElementById('token').value.trim());
+    try {
+      const { races } = await api('teams/rename', { method: 'POST', auth: true, body: JSON.stringify({ from, to }) });
+      const [summaries] = await Promise.all([api('races'), loadLists()]);
+      state.teamRaces = summaries;
+      state.teamDraft = state.teams.map((t) => ({ ...t, members: t.members.map((m) => ({ ...m })) }));
+      state.openTeam = null;
+      refreshPreviews({ teams: [to] });
+      renderTeams(`Renamed ${esc(from)} to ${esc(to)}${races ? ` in ${races} race${races === 1 ? '' : 's'}` : ''}.`);
+    } catch (e) {
+      renderTeams(`Couldn't rename ${esc(from)}: ${esc(e.message)}`);
+    }
+  });
   app.querySelectorAll('[data-team-color]').forEach((el) => el.addEventListener('change', () => { draft[+el.dataset.teamColor].color = el.value; changed(); }));
   app.querySelectorAll('[data-team-open]').forEach((el) => el.addEventListener('click', () => {
     state.openTeam = state.openTeam === +el.dataset.teamOpen ? null : +el.dataset.teamOpen;

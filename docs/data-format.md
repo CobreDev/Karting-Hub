@@ -86,7 +86,8 @@ and a two-tone line on the chart. `PUT /api/drivers` replaces the whole list.
 }
 ```
 
-Races refer to teams by name, matched like drivers. The team's color is used in every race. `members` is the
+Races refer to teams by name, matched like drivers, so renaming a team (`POST /api/teams/rename`) updates the
+list, every race and the photo file together. The team's color is used in every race. `members` is the
 roster and only contains drivers from `drivers.json`; removing a driver also removes them from rosters.
 `owner` and `core` tie a driver to one team; `rotating` drivers can be on several. `teamListErrors()` checks
 this in the browser and in `PUT /api/teams`.

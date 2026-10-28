@@ -5,6 +5,7 @@ import { roleBadge } from './teams.js';
 import { avatar, bindPhotoPickers, personAvatar, photoButtons } from '../photos.js';
 import { colorChanges, refreshPreviews } from '../preview.js';
 import { loadLists, swatch } from '../registry.js';
+import { bindNameEdits, nameButton } from '../rename.js';
 
 function driverTeams(name) {
   const rows = state.teams.flatMap((t) => t.members.filter((m) => driverId(m.driver) === driverId(name)).map((m) => ({ t, m })))
@@ -85,14 +86,13 @@ function renderDrivers(message) {
           return `<tr>
           <td><div class="driver-cell driver-name">
             ${personAvatar(d.name, 36, ring)}
-            <b>${esc(d.name)}</b></div></td>
+            ${edit ? nameButton(d.name, i) : `<b>${esc(d.name)}</b>`}</div></td>
           <td>${edit
             ? `<span class="driver-color ${d.color ? '' : 'unset'}"><input type="color" data-reg="${i}" value="${d.color || '#8e8d86'}" aria-label="Color for ${esc(d.name)}">${d.color ? `<button class="btn small clear-color" type="button" data-reg-clear="${i}" aria-label="Remove color">✕</button>` : ''}</span>`
             : d.color ? `<span class="swatch large" style="background:${d.color}"></span>` : '<span class="muted">team</span>'}</td>
           <td class="${edit ? 'team-cell' : 'hide-sm'}">${edit && saved ? driverTeamEditor(d.name) : driverTeams(d.name)}</td>
           <td class="secondary hide-sm">${rs.length ? rs.map((r) => `<a href="/r/${encodeURIComponent(r.id)}">${esc(r.name)}</a>`).join(', ') : '<span class="muted">—</span>'}</td>
-          ${edit ? `<td class="actions-cell"><div class="row-actions">${saved ? `${photoButtons('drivers', d.name)}
-            <button class="btn small" type="button" data-reg-rename="${esc(d.name)}">Rename</button>` : '<span class="hint">Not saved yet</span>'}
+          ${edit ? `<td class="actions-cell"><div class="row-actions">${saved ? photoButtons('drivers', d.name) : '<span class="hint">Not saved yet</span>'}
             <button class="btn small danger" type="button" data-reg-remove="${i}">Remove</button></div></td>` : ''}
         </tr>`;
         }).join('') || `<tr><td colspan="4" class="muted">No drivers yet. Add one below or save a race.</td></tr>`}</tbody>
@@ -126,10 +126,12 @@ function renderDrivers(message) {
 
   app.querySelectorAll('[data-reg]').forEach((el) => el.addEventListener('change', () => { state.driverDraft[+el.dataset.reg].color = el.value; changed(); }));
   app.querySelectorAll('[data-reg-clear]').forEach((el) => el.addEventListener('click', () => { state.driverDraft[+el.dataset.regClear].color = ''; changed(); }));
-  app.querySelectorAll('[data-reg-rename]').forEach((el) => el.addEventListener('click', async () => {
-    const from = el.dataset.regRename;
-    const to = prompt(`Rename ${from} to:`, from)?.trim();
-    if (!to || to === from) return;
+  bindNameEdits(async (i, to) => {
+    const from = state.driverDraft[i].name;
+    if (!to) return renderDrivers();
+    if (state.driverDraft.some((o, j) => j !== i && driverId(o.name) === driverId(to))) return renderDrivers(`There is already a driver called ${esc(to)}.`);
+    // not on the server yet, so nothing else refers to the old name
+    if (!state.drivers.some((o) => driverId(o.name) === driverId(from))) { state.driverDraft[i].name = to; return changed(); }
     token.set(document.getElementById('token').value.trim());
     try {
       const { races } = await api('drivers/rename', { method: 'POST', auth: true, body: JSON.stringify({ from, to }) });
@@ -141,7 +143,7 @@ function renderDrivers(message) {
     } catch (e) {
       renderDrivers(`Couldn't rename ${esc(from)}: ${esc(e.message)}`);
     }
-  }));
+  });
   app.querySelectorAll('[data-reg-remove]').forEach((el) => el.addEventListener('click', () => {
     const d = state.driverDraft[+el.dataset.regRemove];
     const rosters = state.teams.filter((t) => t.members.some((m) => driverId(m.driver) === driverId(d.name)));
