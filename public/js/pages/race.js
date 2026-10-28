@@ -6,6 +6,16 @@ import { uploadPreview } from '../preview.js';
 import { applyTeamColors, loadLists, swatch, teamLabel } from '../registry.js';
 import { navigate } from '../router.js';
 
+const helpButton = '<button class="help" type="button" popovertarget="stdev-help" aria-label="What does this mean?">?</button>';
+const STDEV_HELP = `<div id="stdev-help" class="popover" popover>
+  <h3>Consistency (std dev)</h3>
+  <p>The standard deviation of a driver's clean laps, with pit stops and slow laps left out. It's the typical
+  distance between one of their laps and their own average.</p>
+  <p>For example, ±0.450 means most clean laps were within about half a second of the driver's average. Smaller is more
+  consistent. It says nothing about speed: a slow, steady driver can score better than a fast, erratic one.</p>
+  <button class="btn small" type="button" popovertarget="stdev-help" popovertargetaction="hide">Close</button>
+</div>`;
+
 // Size the lap list's driver column to the longest name on the team.
 let measureCtx;
 function driverColumnWidths(kart) {
@@ -32,14 +42,17 @@ export async function showRace(id, focusKey, teamArg) {
   const teamView = focusKey === 'team';
   const focus = teamView ? null : drivers.find((d) => d.key === focusKey) || null;
   const karts = kartRuns(race, drivers);
-  const lapKart = (teamView && karts.find((r) => r.k.number === teamArg)) || (focus && karts.find((r) => r.k.number === focus.kart)) || karts[0];
+  // karts race at the same time: race length is the most laps, not the sum
+  const lapsOf = (k) => (k.laps.length ? k.laps[k.laps.length - 1].lap : 0);
+  // the winning kart: most laps, then the least time for them
+  const lapTotal = (k) => k.laps.reduce((a, l) => a + l.ms, 0);
+  const winner = [...karts].sort((a, b) => lapsOf(b.k) - lapsOf(a.k) || lapTotal(a.k) - lapTotal(b.k))[0];
+  const lapKart = (teamView && karts.find((r) => r.k.number === teamArg)) || (focus && karts.find((r) => r.k.number === focus.kart)) || winner;
   if (state.raceId !== id) { state.hidden = new Set(); state.raceId = id; }
   state.slowFactor = race.slowFactor;
 
   const fastest = ranked[0];
   const consistent = [...drivers].filter((d) => d.cleanCount >= 10).sort((a, b) => a.stdev - b.stdev)[0];
-  // karts race at the same time: race length is the most laps, not the sum
-  const lapsOf = (k) => (k.laps.length ? k.laps[k.laps.length - 1].lap : 0);
   const raceLaps = Math.max(0, ...race.karts.map(lapsOf));
   const gaps = race.karts.map((k) => ({ k, miss: missingLaps(k.laps) })).filter((g) => g.miss.length);
 
@@ -67,7 +80,7 @@ export async function showRace(id, focusKey, teamArg) {
       <dl class="figures">
         ${fastest ? `<div><dt>Fastest lap</dt><dd class="figure">${fmtTime(fastest.best)}</dd>
           <dd>${esc(fastest.driver)}, lap ${fastest.bestLapNo}</dd></div>` : ''}
-        ${consistent ? `<div><dt>Most consistent</dt><dd class="figure">±${(consistent.stdev / 1000).toFixed(3)}</dd>
+        ${consistent ? `<div><dt>Most consistent ${helpButton}</dt><dd class="figure">±${(consistent.stdev / 1000).toFixed(3)}</dd>
           <dd>${esc(consistent.driver)}</dd></div>` : ''}
         <div><dt>Laps</dt><dd class="figure">${raceLaps}</dd>
           <dd>${race.karts.length > 1 && race.karts.length <= 4
@@ -94,6 +107,7 @@ export async function showRace(id, focusKey, teamArg) {
 
     <section class="section" id="focus">${lapSection(focus, karts, lapKart)}</section>
 
+    ${STDEV_HELP}
     ${gaps.length ? `<p class="footnote">No timing data for ${gaps.map((g) => `#${esc(g.k.number)} lap${g.miss.length > 1 ? 's' : ''} ${g.miss.join(', ')}`).join('; ')}.</p>` : ''}
   `;
 
@@ -111,6 +125,8 @@ export async function showRace(id, focusKey, teamArg) {
     drawChart();
   });
   app.onclick = (ev) => {
+    // browsers without the popover API (iOS before 17) get the text in an alert instead
+    if (ev.target.closest('[popovertarget]') && !HTMLElement.prototype.togglePopover) alert(document.getElementById('stdev-help').innerText);
     const pick = ev.target.closest('[data-focus]');
     if (pick) navigate(`/r/${encodeURIComponent(race.id)}/${encodeURIComponent(pick.dataset.focus)}`);
     const rerender = () => (document.getElementById('focus').innerHTML = lapSection(focus, karts, lapKart));
@@ -137,7 +153,7 @@ function leaderboard(ranked, focus) {
     <thead><tr>
       <th>#</th><th>Driver</th><th class="hide-sm">Team</th><th class="num hide-sm">Laps</th>
       <th class="num">Best</th><th class="num">Gap</th><th class="num hide-sm">Best 5 avg</th>
-      <th class="num">Avg</th><th class="num hide-sm">Median</th><th class="num hide-sm" title="Standard deviation of clean laps: how far they typically are from the average">Std dev</th>
+      <th class="num">Avg</th><th class="num hide-sm">Median</th><th class="num hide-sm">Std dev ${helpButton}</th>
       <th class="hide-sm">Pace spread <span title="dot = best lap, bar = 10th–90th percentile of clean laps, tick = median">ⓘ</span></th>
     </tr></thead>
     <tbody>${ranked.map((d, i) => `

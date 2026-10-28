@@ -2,6 +2,20 @@ import { fmtTime, quantile } from '../lib/race.js';
 import { esc } from './core.js';
 import { swatch, teamColor } from './registry.js';
 
+// Legend entries drawn with the same strokes the chart uses.
+function legend(twoTone) {
+  const line = (attrs) => `<svg width="26" height="10" aria-hidden="true"><line x1="1" y1="5" x2="25" y2="5" ${attrs}/></svg>`;
+  const ink = 'stroke="var(--text-secondary)" stroke-width="2"';
+  return [
+    [line(ink), 'Lap'],
+    [line(`${ink} stroke-dasharray="1.5 3" stroke-linecap="round"`), 'Slow lap'],
+    [line('class="bridge"'), 'Off the chart, usually a pit stop'],
+    ['<svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="var(--text-secondary)"/></svg>', 'Best lap'],
+    ['<svg width="6" height="12" aria-hidden="true"><line x1="3" y1="0" x2="3" y2="12" class="change"/></svg>', 'Driver change'],
+    ...(twoTone ? [[line('stroke="var(--text-muted)" stroke-width="2.25" stroke-dasharray="9 7"') .replace('</svg>', '<line x1="1" y1="5" x2="25" y2="5" stroke="var(--text-primary)" stroke-width="2.25" stroke-dasharray="4 12" stroke-dashoffset="5.5"/></svg>'), 'Driver with their own color']] : []),
+  ].map(([icon, label]) => `<span>${icon}${label}</span>`).join('');
+}
+
 export function lapChart(el, karts, focus) {
   if (!karts.length) { el.innerHTML = '<p class="muted">All karts hidden.</p>'; return; }
   const W = Math.max(320, el.clientWidth);
@@ -77,7 +91,7 @@ export function lapChart(el, karts, focus) {
   }).join('')).join('');
 
   el.innerHTML = `
-    <div class="legend"><span>● Best lap</span><span>│ Driver change</span>${karts.some((r) => r.chunks.some((c) => c.d.ownColor)) ? '<span>Two-tone: driver and team color</span>' : ''}<span>Dotted: slow lap</span><span>Gray dashes: skips laps too long for the scale, like pit stops</span></div>
+    <div class="legend">${legend(karts.some((r) => r.chunks.some((c) => c.d.ownColor)))}</div>
     <svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Lap time by lap number for each kart">
       ${yTicks.map((v) => `<line class="gridline" x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}"/>
         <text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${fmtTime(v).replace(/\.000$|0+$/, '').replace(/\.$/, '')}</text>`).join('')}
