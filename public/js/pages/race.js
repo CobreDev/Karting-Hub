@@ -46,8 +46,8 @@ export async function showRace(id, focusKey, teamArg) {
   app.innerHTML = `
     <div class="page-head">
       <div>
-        <div><a href="/">← All races</a></div>
-        <h1 style="margin-top:6px">${esc(race.name)}</h1>
+        <a class="crumb" href="/">Races</a>
+        <h1>${esc(race.name)}</h1>
         <div class="meta">${esc(fmtRaceDate(race.date))}${race.track ? ` · ${esc(race.track)}` : ''}</div>
       </div>
       <div class="actions">
@@ -56,42 +56,45 @@ export async function showRace(id, focusKey, teamArg) {
       </div>
     </div>
 
-    <div class="teams">${race.karts.map((k, ki) => `
-      <div class="team"><span class="team-bar" style="background:var(--t-${ki})"></span>
-        ${avatar('teams', k.team, 44, `var(--t-${ki})`)}
-        <div><div class="team-name">${esc(teamLabel(k))}</div>
-        <div class="muted">${k.team ? `#${esc(k.number)} · ` : ''}${esc(drivers.filter((d) => d.kart === k.number).map((d) => d.driver).join(' → '))}</div></div></div>`).join('')}</div>
+    <div class="race-head">
+      <ol class="entries">${race.karts.map((k, ki) => `
+        <li class="entry" style="--team:var(--t-${ki})">
+          ${avatar('teams', k.team, 40, `var(--t-${ki})`, `<span class="entry-num">${esc(k.number)}</span>`)}
+          <div><div class="entry-name">${esc(teamLabel(k))}${k.team ? ` <span class="muted">#${esc(k.number)}</span>` : ''}</div>
+          <div class="entry-drivers">${esc(drivers.filter((d) => d.kart === k.number).map((d) => d.driver).join(', '))}</div></div>
+        </li>`).join('')}</ol>
 
-    <div class="tiles">
-      ${fastest ? `<div class="card tile"><div class="label">Fastest lap</div><div class="value">${fmtTime(fastest.best)}</div>
-        <div class="sub">${esc(fastest.driver)} · #${esc(fastest.kart)} · lap ${fastest.bestLapNo}</div></div>` : ''}
-      ${consistent ? `<div class="card tile"><div class="label">Most consistent</div><div class="value">±${(consistent.stdev / 1000).toFixed(3)}</div>
-        <div class="sub">${esc(consistent.driver)} · std dev of clean laps</div></div>` : ''}
-      <div class="card tile"><div class="label">Race laps</div><div class="value">${raceLaps}</div>
-        <div class="sub">${race.karts.length > 1 && race.karts.length <= 4
-          ? race.karts.map((k) => `#${esc(k.number)} ${lapsOf(k)}`).join(' · ')
-          : `${race.karts.length} kart${race.karts.length === 1 ? '' : 's'}`} · ${drivers.length} driver${drivers.length === 1 ? '' : 's'}</div></div>
+      <dl class="figures">
+        ${fastest ? `<div><dt>Fastest lap</dt><dd class="figure">${fmtTime(fastest.best)}</dd>
+          <dd>${esc(fastest.driver)}, lap ${fastest.bestLapNo}</dd></div>` : ''}
+        ${consistent ? `<div><dt>Most consistent</dt><dd class="figure">±${(consistent.stdev / 1000).toFixed(3)}</dd>
+          <dd>${esc(consistent.driver)}</dd></div>` : ''}
+        <div><dt>Laps</dt><dd class="figure">${raceLaps}</dd>
+          <dd>${race.karts.length > 1 && race.karts.length <= 4
+            ? race.karts.map((k) => `#${esc(k.number)} ${lapsOf(k)}`).join(', ')
+            : `${race.karts.length} kart${race.karts.length === 1 ? '' : 's'}`}</dd></div>
+      </dl>
     </div>
 
-    <section class="card section">
+    <section class="section">
       <div class="section-head">
         <h2>Drivers</h2>
-        <p>Averages use clean laps only — pit/driver-change laps and laps over ${Math.round(((race.slowFactor || DEFAULT_SLOW_FACTOR) - 1) * 100)}% off a driver's median are left out.</p>
+        <p>Averages leave out pit laps and laps more than ${Math.round(((race.slowFactor || DEFAULT_SLOW_FACTOR) - 1) * 100)}% off the driver's median.</p>
       </div>
       <div class="table-wrap">${leaderboard(ranked, focus)}</div>
     </section>
 
-    <section class="card section">
-      <div class="section-head"><h2>Lap times</h2><p>One line per kart in the team color. Tap a team to show or hide it.</p></div>
-      <div class="chips" id="chips" style="margin-bottom:12px">${karts.map((r) => `
+    <section class="section">
+      <div class="section-head"><h2>Lap times</h2></div>
+      <div class="chips" id="chips">${karts.map((r) => `
         <button class="chip" type="button" data-key="${esc(r.k.number)}" aria-pressed="${!state.hidden.has(r.k.number)}">
           <span class="swatch" style="background:${r.color}"></span>${esc(r.label)} <span class="muted">#${esc(r.k.number)}</span></button>`).join('')}</div>
       <div class="chart" id="lap-chart"></div>
     </section>
 
-    <section class="card section" id="focus">${lapSection(focus, karts, lapKart)}</section>
+    <section class="section" id="focus">${lapSection(focus, karts, lapKart)}</section>
 
-    ${gaps.length ? `<p class="muted" style="font-size:13px;margin-top:16px">Timing gaps: ${gaps.map((g) => `#${esc(g.k.number)} has no data for lap${g.miss.length > 1 ? 's' : ''} ${g.miss.join(', ')}`).join('; ')} (missed by the timing loop).</p>` : ''}
+    ${gaps.length ? `<p class="footnote">No timing data for ${gaps.map((g) => `#${esc(g.k.number)} lap${g.miss.length > 1 ? 's' : ''} ${g.miss.join(', ')}`).join('; ')}.</p>` : ''}
   `;
 
   const drawChart = () => lapChart(document.getElementById('lap-chart'), karts.filter((r) => !state.hidden.has(r.k.number)), focus);
@@ -141,7 +144,7 @@ function leaderboard(ranked, focus) {
       <tr class="clickable ${d.key === focus?.key ? 'focused' : ''}" data-focus="${esc(d.key)}">
         <td class="num muted">${i + 1}</td>
         <td><div class="driver-cell">${driverAvatar(d)}<span>${esc(d.driver)}<span class="show-sm team-sub">${esc(d.team || `Kart #${d.kart}`)}</span></span></div></td>
-        <td class="secondary hide-sm" style="white-space:nowrap">${esc(d.team || `Kart #${d.kart}`)} <span class="muted">#${esc(d.kart)}</span></td>
+        <td class="secondary hide-sm nowrap">${esc(d.team || `Kart #${d.kart}`)} <span class="muted">#${esc(d.kart)}</span></td>
         <td class="num hide-sm" title="Laps ${esc(stintText(d))}">${d.count} <span class="muted">(${esc(stintText(d))})</span></td>
         <td class="num ${i === 0 ? 'best-time' : ''}">${fmtTime(d.best)}</td>
         <td class="num muted">${i === 0 ? '—' : fmtDelta(d.best - ranked[0].best)}</td>
@@ -203,25 +206,27 @@ function lapSection(focus, karts, kart) {
   if (state.newestFirst) rows.reverse();
 
   return `
-    <div class="section-head"><h2>Lap by lap</h2>
-      <p>Every lap for the team in race order.</p></div>
-    <div class="focus-tabs" role="tablist" aria-label="Team">${karts.map((r) => `
-      <button class="chip tab team-tab" type="button" role="tab" data-team="${esc(r.k.number)}" aria-pressed="${r === kart}" aria-selected="${r === kart}">
+    <div class="section-head"><h2>Lap by lap</h2></div>
+    <div class="tabs" role="tablist" aria-label="Team">${karts.map((r) => `
+      <button class="tab" type="button" role="tab" data-team="${esc(r.k.number)}" aria-pressed="${r === kart}" aria-selected="${r === kart}">
         ${avatar('teams', r.k.team, 18, r.color, `<span class="swatch" style="background:${r.color}"></span>`)}${esc(r.label)} <span class="muted">#${esc(r.k.number)}</span></button>`).join('')}</div>
 
-    <div class="rm" style="margin-top:14px;${driverColumnWidths(kart)}">
+    <div class="rm" style="${driverColumnWidths(kart)}">
       <div class="rm-head">
-        <div class="rm-team">${avatar('teams', kart.k.team, 32, kart.color, `<span class="swatch" style="background:${kart.color}"></span>`)}${esc(kart.label)} · #${esc(kart.k.number)}</div>
-        <div class="rm-total"><span>Total:</span> ${kart.laps.length} laps</div>
-        <div class="rm-big">${fmtTime(kartTotal)}</div>
-        <div class="rm-sub">
-          <div><span>Best Lap: ${kartBest.lap}</span><b>${fmtTime(kartBest.ms)}</b></div>
-          <div><span>Diff:</span><b>${kartBest.ms === fastest ? '—' : (Math.abs(kartBest.ms - fastest) / 1000).toFixed(3)}</b></div>
-        </div>
-        <div class="stint-summary">${kart.chunks.map((c) => `
-          <span class="stint-sum ${c.d.key === focus?.key ? 'focused' : ''}" style="--stint-color:${c.d.color}">
-            ${driverAvatar(c.d, 20)}<b>${esc(c.d.driver)}</b>
-            <span>laps ${c.from}–${c.to} · best ${fmtTime(c.best.ms)} · avg ${fmtTime(c.avg)}</span></span>`).join('')}</div>
+        <dl class="figures">
+          <div><dt>Laps</dt><dd class="figure">${kart.laps.length}</dd></div>
+          <div><dt>Lap time total</dt><dd class="figure">${fmtTime(kartTotal).replace(/\.\d+$/, '')}</dd></div>
+          <div><dt>Best lap</dt><dd class="figure">${fmtTime(kartBest.ms)}</dd><dd>lap ${kartBest.lap}</dd></div>
+          <div><dt>Gap to fastest</dt><dd class="figure">${kartBest.ms === fastest ? '—' : fmtDelta(kartBest.ms - fastest)}</dd></div>
+        </dl>
+        <table class="stints">
+          <thead><tr><th>Driver</th><th class="num">Laps</th><th class="num">Best</th><th class="num">Avg</th></tr></thead>
+          <tbody>${kart.chunks.map((c) => `
+            <tr class="${c.d.key === focus?.key ? 'focused' : ''}" style="--stint-color:${c.d.color}">
+              <td><span class="driver-cell">${driverAvatar(c.d, 20)}${esc(c.d.driver)}</span></td>
+              <td class="num">${c.from}–${c.to}</td><td class="num">${fmtTime(c.best.ms)}</td><td class="num">${fmtTime(c.avg)}</td>
+            </tr>`).join('')}</tbody>
+        </table>
       </div>
       <div class="rm-toolbar"><button class="btn small" type="button" data-order>${state.newestFirst ? 'Oldest first' : 'Newest first'}</button></div>
       <div class="rm-cols"><span>Lap</span><span class="hide-sm">Pos.</span><span>Driver</span><span>Time</span><span class="num">Δ best</span><span class="num">Δ prev</span><span class="hide-sm"></span></div>
@@ -236,11 +241,11 @@ function lapSection(focus, karts, kart) {
           <span class="rm-driver">${driverAvatar(l.c.d, 22)}<span class="dn-full">${esc(l.c.d.driver)}</span><span class="dn-short">${esc(shortName(l.c.d.driver))}</span></span>
           <span class="rm-time ${isBest ? 'best-time' : ''}"><span class="t-full">${fmtClock(l.ms)}</span><span class="t-short">${fmtTime(l.ms)}</span>
             <i class="rm-bar ${kind}" style="width:${Math.min(100, (l.ms / scaleMax) * 100).toFixed(1)}%"></i></span>
-          <span class="num rm-delta">${isBest ? '<span class="pill best">Best</span>' : fmtDelta(l.ms - l.c.best.ms)}</span>
+          <span class="num rm-delta">${isBest ? '<span class="tag best">Best</span>' : fmtDelta(l.ms - l.c.best.ms)}</span>
           <span class="num rm-delta ${dPrev == null ? '' : dPrev < 0 ? 'faster' : 'slower'}">${dPrev == null ? '' : `${dPrev < 0 ? '▼' : '▲'} ${(Math.abs(dPrev) / 1000).toFixed(3)}`}</span>
-          <span class="rm-note hide-sm">${l.flag === 'pit' ? '<span class="pill">Pit / change</span>' : l.flag === 'slow' ? '<span class="pill">Slow</span>' : ''}</span>
+          <span class="rm-note hide-sm">${l.flag === 'pit' ? '<span class="tag">Pit</span>' : l.flag === 'slow' ? '<span class="tag">Slow</span>' : ''}</span>
         </div>`;
       }).join('')}
-      <div class="rm-legend"><span><i class="rm-key good"></i>clean</span><span><i class="rm-key warn"></i>slow (over ${Math.round(((state.slowFactor || DEFAULT_SLOW_FACTOR) - 1) * 100)}% off median)</span><span><i class="rm-key crit"></i>pit / driver change</span><span>Δ best is against that driver's best · ▼ faster than previous lap · ▲ slower</span></div>
+      <div class="rm-legend"><span><i class="rm-key good"></i>Clean</span><span><i class="rm-key warn"></i>Slow</span><span><i class="rm-key crit"></i>Pit</span><span>Δ best is against that driver's own best.</span></div>
     </div>`;
 }

@@ -27,9 +27,9 @@ function driverTeamEditor(name) {
       <button class="btn small clear-color" type="button" data-dt-remove="${esc(t.name)}" data-driver="${esc(name)}" aria-label="Take ${esc(name)} off ${esc(t.name)}">✕</button>
     </span>`).join('')}
     ${others.length ? `<select class="add-team" data-dt-add="${esc(name)}" aria-label="Add ${esc(name)} to a team">
-      <option value="">+ Add to team…</option>
+      <option value="">Add to team…</option>
       ${others.map((t) => `<option value="${esc(t.name)}">${esc(t.name)}</option>`).join('')}
-    </select>` : state.teams.length ? '' : '<a class="muted" href="/teams" style="font-size:13px">Add teams first</a>'}
+    </select>` : state.teams.length ? '' : '<a class="hint" href="/teams">Add teams first</a>'}
   </div>`;
 }
 
@@ -72,12 +72,12 @@ function renderDrivers(message) {
   const racesFor = (name) => state.driverRaces.filter((r) => r.drivers.some((n) => driverId(n) === driverId(name)));
   app.innerHTML = `
     <div class="page-head">
-      <div><div><a href="/">← All races</a></div><h1 style="margin-top:6px">Drivers</h1>
-        <div class="meta">Personal colors apply in every race, whichever team the driver is on.</div></div>
+      <div><a class="crumb" href="/">Races</a><h1>Drivers</h1>
+        <div class="meta">Photos and colors follow a driver into every race.</div></div>
     </div>
-    <section class="card section">
+    <section class="section">
       <div class="table-wrap"><table class="${edit ? 'stack-sm drivers-table' : ''}">
-        <thead><tr><th>Driver</th><th style="width:70px">Color</th><th class="${edit ? '' : 'hide-sm'}">Team</th><th class="hide-sm">Races</th>${edit ? '<th></th>' : ''}</tr></thead>
+        <thead><tr><th>Driver</th><th class="col-color">Color</th><th class="${edit ? '' : 'hide-sm'}">Team</th><th class="hide-sm">Races</th>${edit ? '<th></th>' : ''}</tr></thead>
         <tbody>${state.driverDraft.map((d, i) => {
           const rs = racesFor(d.name);
           const ring = d.color || 'var(--border)';
@@ -88,13 +88,13 @@ function renderDrivers(message) {
             <b>${esc(d.name)}</b></div></td>
           <td>${edit
             ? `<span class="driver-color ${d.color ? '' : 'unset'}"><input type="color" data-reg="${i}" value="${d.color || '#8e8d86'}" aria-label="Color for ${esc(d.name)}">${d.color ? `<button class="btn small clear-color" type="button" data-reg-clear="${i}" aria-label="Remove color">✕</button>` : ''}</span>`
-            : d.color ? `<span class="swatch" style="background:${d.color};width:16px;height:16px"></span>` : '<span class="muted">team</span>'}</td>
+            : d.color ? `<span class="swatch large" style="background:${d.color}"></span>` : '<span class="muted">team</span>'}</td>
           <td class="${edit ? 'team-cell' : 'hide-sm'}">${edit && saved ? driverTeamEditor(d.name) : driverTeams(d.name)}</td>
           <td class="secondary hide-sm">${rs.length ? rs.map((r) => `<a href="/r/${encodeURIComponent(r.id)}">${esc(r.name)}</a>`).join(', ') : '<span class="muted">—</span>'}</td>
-          ${edit ? `<td class="actions-cell"><div class="row-actions">${saved ? photoButtons('drivers', d.name) : '<span class="muted" style="font-size:12px">not saved yet</span>'}
+          ${edit ? `<td class="actions-cell"><div class="row-actions">${saved ? photoButtons('drivers', d.name) : '<span class="hint">Not saved yet</span>'}
             <button class="btn small danger" type="button" data-reg-remove="${i}">Remove</button></div></td>` : ''}
         </tr>`;
-        }).join('') || `<tr><td colspan="4" class="muted">No drivers yet — they're added when you save a race.</td></tr>`}</tbody>
+        }).join('') || `<tr><td colspan="4" class="muted">No drivers yet. Add one below or save a race.</td></tr>`}</tbody>
       </table></div>
       ${edit ? `<div class="add-driver"><input type="text" id="new-driver" placeholder="Add a driver" maxlength="60"><button class="btn" id="add-driver" type="button">Add</button></div>` : ''}
       ${message ? `<div class="notice">${message}</div>` : ''}

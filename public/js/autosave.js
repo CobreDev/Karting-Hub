@@ -5,7 +5,7 @@ export function autosaver({ path, body, validate = () => [], onSaved, status }) 
   let inFlight = null, pending = false;
   const run = async () => {
     const problems = validate();
-    if (problems.length) return status('error', 'Not saved yet — fix the problem above.');
+    if (problems.length) return status('error', 'Not saved: fix the problem above.');
     if (!token.get()) return status('error', 'Enter your admin token to save changes.');
     status('saving', 'Saving…');
     try {
@@ -27,7 +27,7 @@ export function autosaver({ path, body, validate = () => [], onSaved, status }) 
 
 export function saveBar(st) {
   return `<div class="sticky-save"><span id="save-msg" class="save-status ${st?.kind || ''}">${esc(st?.text || 'Changes save automatically')}</span>
-    <input type="password" id="token" placeholder="Admin token" value="${esc(token.get())}" style="max-width:180px"></div>`;
+    <input type="password" id="token" class="token" placeholder="Admin token" value="${esc(token.get())}"></div>`;
 }
 export function showSaveStatus(kind, text) {
   const el = document.getElementById('save-msg');

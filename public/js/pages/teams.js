@@ -49,12 +49,12 @@ function renderTeams(message) {
   const order = { owner: 0, core: 1, rotating: 2 };
   app.innerHTML = `
     <div class="page-head">
-      <div><div><a href="/">← All races</a></div><h1 style="margin-top:6px">Teams</h1>
-        <div class="meta">Team colors and photos apply in every race. Owner and core drivers are tied to one team; rotating drivers can race for others.</div></div>
+      <div><a class="crumb" href="/">Races</a><h1>Teams</h1>
+        <div class="meta">Owners and core drivers belong to one team. Rotating drivers can be on several.</div></div>
     </div>
-    <section class="card section">
+    <section class="section">
       <div class="table-wrap"><table class="stack-sm teams-table">
-        <thead><tr><th>Team</th><th style="width:70px">Color</th><th>Roster</th><th class="hide-sm">Races</th>${edit ? '<th></th>' : ''}</tr></thead>
+        <thead><tr><th>Team</th><th class="col-color">Color</th><th>Roster</th><th class="hide-sm">Races</th>${edit ? '<th></th>' : ''}</tr></thead>
         <tbody>${state.teamDraft.map((t, i) => {
           const rs = racesFor(t.name);
           const ring = t.color || 'var(--border)';
@@ -67,16 +67,16 @@ function renderTeams(message) {
               <b>${esc(t.name)}</b></div></td>
             <td>${edit
               ? `<span class="driver-color ${t.color ? '' : 'unset'}"><input type="color" data-team-color="${i}" value="${t.color || '#8e8d86'}" aria-label="Color for ${esc(t.name)}"></span>`
-              : t.color ? `<span class="swatch" style="background:${t.color};width:16px;height:16px"></span>` : '<span class="muted">—</span>'}</td>
+              : t.color ? `<span class="swatch large" style="background:${t.color}"></span>` : '<span class="muted">—</span>'}</td>
             <td class="roster-cell"><div class="members">${members.map(memberChip).join('') || '<span class="muted">No roster yet</span>'}</div></td>
             <td class="secondary hide-sm">${rs.length ? rs.map((r) => `<a href="/r/${encodeURIComponent(r.id)}">${esc(r.name)}</a>`).join(', ') : '<span class="muted">—</span>'}</td>
             ${edit ? `<td class="actions-cell"><div class="row-actions">
               <button class="btn small" type="button" data-team-open="${i}" aria-expanded="${open}">${open ? 'Done' : 'Edit roster'}</button>
-              ${saved ? photoButtons('teams', t.name) : '<span class="muted" style="font-size:12px">not saved yet</span>'}
+              ${saved ? photoButtons('teams', t.name) : '<span class="hint">Not saved yet</span>'}
               <button class="btn small danger" type="button" data-team-remove="${i}">Remove</button></div></td>` : ''}
           </tr>
           ${edit && open ? `<tr class="roster-row"><td colspan="5">${rosterEditor(t, i)}</td></tr>` : ''}`;
-        }).join('') || `<tr><td colspan="5" class="muted">No teams yet — they're added when you save a race.</td></tr>`}</tbody>
+        }).join('') || `<tr><td colspan="5" class="muted">No teams yet. Add one below or save a race.</td></tr>`}</tbody>
       </table></div>
       ${edit ? `<div class="add-driver"><input type="text" id="new-team" placeholder="Add a team" maxlength="60"><button class="btn" id="add-team" type="button">Add</button></div>` : ''}
       ${errors.length ? `<div class="notice error">${errors.map(esc).join('<br>')}</div>` : ''}
@@ -97,7 +97,7 @@ function rosterEditor(t, i) {
     <p class="muted">Owner and core drivers are tied to ${esc(t.name)} and can't be owner/core of another team. Rotating drivers can be on other rosters too.</p>
     ${t.members.map((m, mi) => `<div class="roster-member">
       <span class="driver-cell">${personAvatar(m.driver, 24, driverRing(m.driver))}<b>${esc(m.driver)}</b>
-        ${isSavedDriver(m.driver) ? '' : `<span class="pill warn" title="Rosters should only use drivers from the Drivers page">not on Drivers page</span>
+        ${isSavedDriver(m.driver) ? '' : `<span class="tag warn" title="Rosters should only use drivers from the Drivers page">not on Drivers page</span>
         <button class="btn small" type="button" data-member-register="${esc(m.driver)}">Add to Drivers</button>`}</span>
       ${roleSelect(`data-member-role="${i}:${mi}" aria-label="Role for ${esc(m.driver)}"`, m.role)}
       <button class="btn small" type="button" data-member-remove="${i}:${mi}" aria-label="Remove ${esc(m.driver)} from roster">✕</button>
@@ -112,7 +112,7 @@ function rosterEditor(t, i) {
     </div>` : `<p class="muted">${state.drivers.length
       ? 'Everyone on the <a href="/drivers">Drivers page</a> is already on this roster.'
       : 'Add drivers on the <a href="/drivers">Drivers page</a> first, then pick them here.'}</p>`}
-    ${history.length ? `<div class="suggest">Raced for ${esc(t.name)}: ${history.map((d) => `<button class="btn small" type="button" data-member-quick="${i}" data-driver="${esc(d)}">+ ${esc(d)}</button>`).join('')}</div>` : ''}
+    ${history.length ? `<div class="suggest">Raced for ${esc(t.name)}: ${history.map((d) => `<button class="btn small" type="button" data-member-quick="${i}" data-driver="${esc(d)}">${esc(d)}</button>`).join('')}</div>` : ''}
   </div>`;
 }
 

@@ -27,8 +27,8 @@ function renderEditor(message) {
   const r = state.edit;
   app.innerHTML = `
     <div class="page-head">
-      <div><div><a href="${state.isNew ? '/' : `/r/${encodeURIComponent(r.id)}`}">← Back</a></div>
-        <h1 style="margin-top:6px">${state.isNew ? 'New race' : 'Edit race'}</h1></div>
+      <div><a class="crumb" href="${state.isNew ? '/' : `/r/${encodeURIComponent(r.id)}`}">${state.isNew ? 'Races' : esc(r.name)}</a>
+        <h1>${state.isNew ? 'New race' : 'Edit race'}</h1></div>
       ${state.isNew ? '' : '<div class="actions"><button class="btn danger" id="delete" type="button">Delete race</button></div>'}
     </div>
 
@@ -43,21 +43,21 @@ function renderEditor(message) {
     </section>
 
     <section class="card section">
-      <div class="section-head"><h2>Upload Race Monitor files</h2><p>Drop every .txt export — split sessions for the same kart get merged by lap number.</p></div>
+      <div class="section-head"><h2>Upload Race Monitor files</h2><p>Add every .txt export. Files for the same kart are merged by lap number.</p></div>
       <label class="dropzone" id="drop">
         <input type="file" id="files" accept=".txt,text/plain" multiple hidden>
         <strong>Choose files</strong> or drag them here
       </label>
       ${state.pending.length ? `
-        <div class="table-wrap" style="margin-top:12px"><table>
-          <thead><tr><th>File</th><th>Header</th><th class="num">Laps</th><th class="hide-sm">Session</th><th style="width:110px">Kart #</th></tr></thead>
+        <div class="table-wrap pending-files"><table>
+          <thead><tr><th>File</th><th>Header</th><th class="num">Laps</th><th class="hide-sm">Session</th><th class="col-kart">Kart #</th></tr></thead>
           <tbody>${state.pending.map((p, i) => `<tr>
             <td>${esc(p.filename)}</td>
-            <td class="secondary">#${esc(p.headerNumber)} ${esc(p.headerName)}${p.headerNumber && p.headerNumber !== p.kart ? ' <span class="pill" title="Header kart number differs from the file name">differs</span>' : ''}</td>
+            <td class="secondary">#${esc(p.headerNumber)} ${esc(p.headerName)}${p.headerNumber && p.headerNumber !== p.kart ? ' <span class="tag" title="Header kart number differs from the file name">differs</span>' : ''}</td>
             <td class="num">${p.laps.length ? `${p.laps.length} (${p.laps[0].lap}–${p.laps[p.laps.length - 1].lap})` : '0'}</td>
             <td class="hide-sm muted">${esc(p.session || '')}</td>
             <td><input type="text" data-pending="${i}" value="${esc(p.kart)}"></td></tr>`).join('')}</tbody></table></div>
-        <div class="actions" style="margin-top:10px"><button class="btn primary" id="add-files" type="button">Add to race</button>
+        <div class="actions"><button class="btn primary" id="add-files" type="button">Add to race</button>
           <button class="btn" id="clear-files" type="button">Discard</button></div>` : ''}
       ${message ? `<div class="notice">${message}</div>` : ''}
     </section>
@@ -66,7 +66,7 @@ function renderEditor(message) {
 
     <div class="sticky-save">
       <span id="save-msg" class="muted"></span>
-      <input type="password" id="token" placeholder="Admin token" value="${esc(token.get())}" style="max-width:180px">
+      <input type="password" id="token" class="token" placeholder="Admin token" value="${esc(token.get())}">
       <button class="btn primary" id="save" type="button">Save race</button>
     </div>`;
   bindEditor();
@@ -86,15 +86,15 @@ function kartEditor(k, ki) {
         <button class="btn small danger" type="button" data-act="remove-kart" data-k="${ki}">Remove kart</button>
       </div>
     </div>
-    <div class="form-grid" style="margin-bottom:8px">
+    <div class="form-grid">
       <label class="field">Team${teamSelect(k, ki)}</label>
       <label class="field">Team color<input type="color" data-k="${ki}" data-kfield="color" value="${esc(editorTeamColor(k, ki))}"
         title="${k.team ? 'Saved to the team, so it applies in every race' : 'Pick a team to reuse this color'}"></label>
       <div class="field">Team photo${photoPicker('teams', k.team, editorTeamColor(k, ki))}</div>
     </div>
-    <div class="secondary" style="font-size:13px">${k.laps.length} laps recorded${k.laps.length ? ` (1–${last})` : ''}${miss.length ? ` · missing ${miss.join(', ')}` : ''}</div>
-    ${pits.length ? `<div class="suggest">Likely pit / driver-change laps: ${pits.map((p) => `<button class="btn small" type="button" data-act="split" data-k="${ki}" data-lap="${p}" title="Add a driver change after lap ${p}">${p}</button>`).join('')}</div>` : ''}
-    <h4 style="margin:12px 0 6px;font-size:14px">Drivers, in order</h4>
+    <div class="kart-laps">${k.laps.length} laps recorded${k.laps.length ? ` (1–${last})` : ''}${miss.length ? ` · missing ${miss.join(', ')}` : ''}</div>
+    ${pits.length ? `<div class="suggest">Likely driver changes after lap ${pits.map((p) => `<button class="btn small" type="button" data-act="split" data-k="${ki}" data-lap="${p}" title="Add a driver change after lap ${p}">${p}</button>`).join('')}</div>` : ''}
+    <h4>Drivers, in order</h4>
     ${rosterHint(k, ki)}
     ${stints.map((s, si) => {
       const to = s.toLap ?? last;
@@ -112,7 +112,7 @@ function kartEditor(k, ki) {
       from = (s.toLap ?? last) + 1;
       return row;
     }).join('')}
-    <button class="btn small" type="button" data-act="add-stint" data-k="${ki}">+ Add driver</button>
+    <button class="btn small" type="button" data-act="add-stint" data-k="${ki}">Add driver</button>
   </section>`;
 }
 
@@ -125,7 +125,7 @@ function teamSelect(k, ki) {
     <option value="" ${k.team ? '' : 'selected'}>No team</option>
     ${state.teams.map((t) => `<option value="${esc(t.name)}" ${driverId(t.name) === driverId(k.team) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}
     ${legacy ? `<option value="${esc(k.team)}" selected>${esc(k.team)} (not on Teams page)</option>` : ''}
-    <option value="${NEW}">+ New team…</option>
+    <option value="${NEW}">New team…</option>
   </select>`;
 }
 
@@ -141,7 +141,7 @@ function driverSelect(k, ki, s, si) {
     ${inRoster.length ? `<optgroup label="${esc(team.name)} roster">${inRoster.map((d) => opt(d.name)).join('')}</optgroup>
       <optgroup label="Other drivers">${others.map((d) => opt(d.name)).join('')}</optgroup>` : others.map((d) => opt(d.name)).join('')}
     ${legacy ? `<option value="${esc(s.driver)}" selected>${esc(s.driver)} (not on Drivers page)</option>` : ''}
-    <option value="${NEW}">+ New driver…</option>
+    <option value="${NEW}">New driver…</option>
   </select>`;
 }
 
@@ -174,7 +174,7 @@ function rosterHint(k, ki) {
   const have = new Set(k.stints.map((s) => driverId(s.driver)));
   const missing = team.members.filter((m) => !have.has(driverId(m.driver)));
   if (!missing.length) return '';
-  return `<div class="suggest">${esc(team.name)} roster: ${missing.map((m) => `<button class="btn small" type="button" data-act="add-member" data-k="${ki}" data-driver="${esc(m.driver)}" title="${ROLES[m.role].label}">+ ${esc(m.driver)}</button>`).join('')}</div>`;
+  return `<div class="suggest">From the ${esc(team.name)} roster: ${missing.map((m) => `<button class="btn small" type="button" data-act="add-member" data-k="${ki}" data-driver="${esc(m.driver)}" title="${ROLES[m.role].label}">${esc(m.driver)}</button>`).join('')}</div>`;
 }
 
 function sortStints(k) {
@@ -258,7 +258,7 @@ function bindEditor() {
       if (!k) { k = { number: p.kart, team: '', laps: [], stints: [] }; r.karts.push(k); }
       const { laps, duplicates } = mergeLaps(k.laps, p.laps, p.session);
       k.laps = laps;
-      notes.push(`${esc(p.filename)} → kart #${esc(p.kart)}: ${p.laps.length - duplicates.length} laps added${duplicates.length ? `, ${duplicates.length} duplicate lap numbers ignored` : ''}`);
+      notes.push(`${esc(p.filename)}: kart #${esc(p.kart)}: ${p.laps.length - duplicates.length} laps added${duplicates.length ? `, ${duplicates.length} duplicate lap numbers ignored` : ''}`);
     }
     r.karts.sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }));
     state.pending = [];

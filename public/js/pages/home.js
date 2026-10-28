@@ -6,14 +6,18 @@ export async function showHome() {
   const races = await api('races');
   app.innerHTML = `
     <div class="page-head">
-      <div><h1>Races</h1><div class="meta">Lap times and stints from Race Monitor exports</div></div>
-      <div class="actions"><a class="btn" href="/teams">Teams</a><a class="btn" href="/drivers">Drivers</a>${state.config.editable ? '<a class="btn primary" href="/new">+ New race</a>' : ''}</div>
+      <div><h1>Races</h1></div>
+      <div class="actions">
+        <a class="btn" href="/teams">Teams</a>
+        <a class="btn" href="/drivers">Drivers</a>
+        ${state.config.editable ? '<a class="btn primary" href="/new">New race</a>' : ''}
+      </div>
     </div>
-    ${races.length ? `<div class="race-grid">${races.map((r) => `
-      <a class="card race-card" href="/r/${encodeURIComponent(r.id)}">
-        <h2>${esc(r.name)}</h2>
-        <div class="secondary">${esc(fmtRaceDate(r.date))}${r.track ? ` · ${esc(r.track)}` : ''}</div>
-        <div class="drivers">${r.teams?.length ? esc(r.teams.join(' vs ')) : `${r.karts} kart${r.karts === 1 ? '' : 's'}`}${r.drivers.length ? ` · ${esc(r.drivers.join(', '))}` : ''}</div>
-      </a>`).join('')}</div>`
-    : `<div class="card muted">No races yet.${state.config.editable ? ' <a href="/new">Add one</a>.' : ''}</div>`}`;
+    ${races.length ? `<ol class="race-list">${races.map((r) => `
+      <li><a class="race-row" href="/r/${encodeURIComponent(r.id)}">
+        <span class="race-date">${esc(fmtRaceDate(r.date))}</span>
+        <span class="race-name">${esc(r.name)}${r.track ? `<span class="muted">${esc(r.track)}</span>` : ''}</span>
+        <span class="race-teams">${esc(r.teams?.length ? r.teams.join(', ') : `${r.karts} karts`)}</span>
+      </a></li>`).join('')}</ol>`
+    : `<p class="empty">No races yet.${state.config.editable ? ' <a href="/new">Add the first one</a>.' : ''}</p>`}`;
 }
