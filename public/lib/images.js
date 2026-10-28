@@ -1,4 +1,4 @@
-// Profile pictures for drivers and teams. Shared by the browser (resizing, URLs) and the server (validation).
+// Photo ids and checks, shared by the browser and the server.
 import { slugify } from './race.js';
 
 // previews = the race link-preview card (1200x630 PNG), keyed by race id.

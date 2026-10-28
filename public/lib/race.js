@@ -1,4 +1,4 @@
-// Shared between the browser and Node: parsing Race Monitor exports and computing driver stats.
+// Race Monitor parsing and lap statistics. Used by the browser, the server and the tests.
 
 /** "00:49.250" | "1:01.234" | "1:02:03.456" -> milliseconds */
 export function parseLapTime(s) {
@@ -71,7 +71,7 @@ export function quantile(xs, q) {
   return s[lo] + (s[Math.ceil(i)] - s[lo]) * (i - lo);
 }
 
-/** Laps well over the kart's typical pace — pit stops / driver changes. */
+/** Laps far over the kart's median: pit stops and driver changes. */
 export function pitCandidates(laps) {
   const med = median(laps.map((l) => l.ms));
   return laps.filter((l) => l.ms > med * 1.8).map((l) => l.lap);
@@ -81,9 +81,8 @@ export const PIT_FACTOR = 1.8;
 export const DEFAULT_SLOW_FACTOR = 1.1;
 
 /**
- * Split each kart into driver entries using its stints ([{driver, toLap}], last toLap empty = to the flag).
- * Each lap gets a flag: 'pit' (> 1.8x the stint median), 'slow' (> slowFactor x median: traffic,
- * yellows, spins) or null (clean). Averages use clean laps only; best lap uses every lap.
+ * One entry per driver per kart, from the kart's stints. Laps are flagged 'pit' (over 1.8x the stint median)
+ * or 'slow' (over slowFactor x the median). Averages use unflagged laps; the best lap uses all of them.
  */
 export function computeDrivers(race) {
   const slowFactor = race.slowFactor || DEFAULT_SLOW_FACTOR;
@@ -151,10 +150,7 @@ export function fmtRaceDate(date) {
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 }
 
-/**
- * The headline facts for a race, used by link previews (server) and the preview card image (browser):
- * date, track, teams in kart order, and the fastest lap with who set it.
- */
+/** Date, track, teams and fastest lap, for link previews and the preview card. */
 export function raceSummary(race) {
   const drivers = computeDrivers(race);
   const fastest = drivers.reduce((b, d) => (!b || d.best < b.best ? d : b), null);
@@ -199,10 +195,7 @@ export const ROLES = {
   rotating: { label: 'Rotating', bound: false },
 };
 
-/**
- * Team list as stored, tidied for use: drops entries without a name and makes sure every team has a color
- * string and a members array, so a hand-edited or older teams.json can't break a page.
- */
+/** Fills in missing fields so an older or hand-edited teams.json can't break a page. */
 export function normalizeTeams(teams) {
   return (Array.isArray(teams) ? teams : [])
     .filter((t) => typeof t?.name === 'string' && t.name.trim())

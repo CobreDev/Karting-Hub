@@ -1,29 +1,33 @@
 # Roadmap
 
-Ideas for later, roughly in the order they'd be most useful. Each is self-contained; pick any.
+Planned work, roughly in order of usefulness. Each item stands on its own.
 
 ## Features
 
-- **Driver profile pages** (`/drivers/<name>`): every race a driver has been in, best lap ever, average pace over
-  time, teams raced for, and their photo/color. The driver list and race lineups already hold what's needed.
-- **Team pages** (`/teams/<name>`): race history, best results, roster with roles, and the team's fastest laps.
-- **Race results**: finishing order, laps completed and the gap between karts, plus a position-by-lap chart.
-  Race Monitor exports include each lap's position (`pos`), which isn't used yet.
-- **Head-to-head view**: pick two drivers (same race or across races) and compare best/average/consistency and
-  lap-time spread side by side, with both on one chart.
-- **Track records**: fastest lap ever at each track (`race.track`), with the driver, team and race.
+Driver pages (`/drivers/<name>`): every race a driver has been in, their best lap, how their pace has changed,
+and which teams they raced for. The driver list and the race summaries already have this information.
 
-## Data safety
+Team pages (`/teams/<name>`): race history, best results, the roster, and the team's fastest laps.
 
-- **Exports**: download a race as JSON or CSV (lap list with driver per lap) from the race page.
-- **Backups**: one-click download of everything (races, drivers, teams, photos) as a zip, and a matching restore.
-  Until then, copying the data folder (`/mnt/user/appdata/karting-hub`) is the backup.
+Race results: finishing order, laps completed and the gap between karts, plus position by lap. The exports
+record each lap's position (`pos`), which nothing uses yet.
 
-## Code health
+Head-to-head: pick two drivers, from the same race or different ones, and compare best lap, average,
+consistency and lap-time spread, with both on one chart.
 
-- **Tests for the server API**: start `server.js` on a temp data folder and exercise races, drivers, teams,
-  images, the wrong-token lockout and link-preview tags. Only the shared logic in `public/lib/` is tested today.
-- **Tests for the UI**: at least a smoke test that every page renders with odd data (no teams, no stints, missing
-  rosters, long names), since that's where past bugs came from.
-- **Organization**: split `public/app.js` (one large file) into modules per page (`race.js` dashboard, `editor.js`,
-  `drivers.js`, `teams.js`, `preview.js`) with shared helpers, keeping the zero-dependency, no-build setup.
+Track records: the fastest lap at each track, with driver, team and race.
+
+## Data
+
+Export a race as JSON, or as CSV with one row per lap and the driver who drove it.
+
+Back up and restore everything (races, drivers, teams, photos) as one download. Until then, copy the data
+folder.
+
+## Tests
+
+Server tests: start `server.js` against a temporary data folder and cover races, drivers, teams, images, the
+wrong-token lockout and the link-preview tags. Only `public/lib/` has tests today.
+
+A UI smoke test that renders every page with awkward data: no teams, no stints, rosters missing, long names.
+Most past bugs were in that area.

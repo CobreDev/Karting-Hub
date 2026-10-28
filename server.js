@@ -1,4 +1,4 @@
-// Karting Hub — zero-dependency Node server: static dashboard + JSON race storage.
+// Karting Hub server: static files, JSON API and link-preview tags. Data is plain files under DATA_DIR.
 import http from 'node:http';
 import { readFile, writeFile, readdir, rename, unlink, mkdir, access, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
@@ -68,7 +68,7 @@ const WINDOW_MS = 15 * 60 * 1000;
 const failures = new Map(); // address -> { count, first, lockedUntil }
 const clientKey = (req) => String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '?';
 
-/** Sends 401/429 and returns false unless the request has the admin token. Only actual guesses count as failures. */
+/** Sends 401/429 and returns false unless the admin token is valid. Requests without a token don't count as guesses. */
 function checkAuth(req, res) {
   if (!TOKEN) { send(res, 401, { error: 'editing disabled: set ADMIN_TOKEN' }); return false; }
   const key = clientKey(req);
@@ -258,7 +258,7 @@ async function api(req, res, parts) {
   return send(res, 405, { error: 'method not allowed' });
 }
 
-// ---------- profile pictures: DATA_DIR/images/<drivers|teams>/<id>.img ----------
+// Photos and preview cards: DATA_DIR/images/<kind>/<id>.img
 const imageFile = (kind, id) => path.join(IMAGES, kind, `${id}.img`);
 
 /** GET /api/images -> { drivers: { id: version }, teams: {...} }; PUT/DELETE /api/images/:kind/:id (admin). */
@@ -314,7 +314,7 @@ async function serveImage(req, res, kind, id, query) {
   res.end(req.method === 'HEAD' ? undefined : data);
 }
 
-// ---------- link previews (iMessage, Slack, Discord…) ----------
+// Link previews
 const escAttr = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 function baseUrl(req) {

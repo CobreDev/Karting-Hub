@@ -1,4 +1,4 @@
-// Team colors -> per-driver shades, stepped in OKLCH lightness and kept inside a readable band per theme.
+// OKLCH helpers that keep team and driver colors readable on light and dark backgrounds.
 
 const BANDS = { light: [0.43, 0.72], dark: [0.54, 0.74] };
 export const DEFAULT_TEAM_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'];

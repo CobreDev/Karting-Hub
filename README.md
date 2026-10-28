@@ -1,30 +1,14 @@
 # Karting Hub
 
-A shareable lap-time dashboard for endurance karting races, built from Race Monitor's per-kart `.txt` exports.
+A lap-time dashboard for endurance kart races. Upload the per-kart `.txt` exports from Race Monitor, say
+which driver drove which laps, and share one link. Each race page shows a driver table (best lap, average,
+consistency), a lap-time chart, and a lap-by-lap list for each team.
 
-Split each kart into driver stints ("Alex to lap 52, Jordan to 90, Sam to the finish"), give each team a
-name and color, and send one link around so everyone can see their best lap, clean-lap average,
-consistency, and every lap of the race.
+Drivers and teams are saved once and reused across races, with optional colors and photos. Race links get
+a preview card in iMessage, Slack and similar apps. There are no runtime dependencies: one Node server,
+plain browser JavaScript, and JSON files on disk.
 
-- **Drivers table**: best lap, gap to fastest, best-5 average, clean-lap average, median, std dev and pace spread.
-- **Lap-time chart**: one line per kart in the team color, with driver-change markers. Slow laps are dotted;
-  pit stops and other off-scale laps are skipped with a gray dashed line. Drivers with their own color get a
-  two-tone dashed line (driver color + team color).
-- **Race Monitor-style lap list**: pick a team and see every lap in race order, with the driver, position, a
-  lap-time bar (green / yellow / red), Δ to the driver's best and Δ to the previous lap.
-- **Teams page with rosters**: each team's color, photo and roster, picked from the Drivers page. Owner and
-  core drivers are tied to one team; rotating drivers can race for several. The Drivers and Teams pages save
-  every change automatically.
-- **Driver list with personal colors and photos**: drivers are saved once and reused across races and teams.
-  Teams can have a photo too. Photos are cropped square and shrunk to 256×256 in the browser before upload.
-- **Per-driver links** (`/r/<race>/<driver>|<kart>`) jump straight to that driver's laps.
-- **Link previews** for iMessage, Slack, Discord and others: race links show a card with the teams, fastest lap
-  and driver, date and track. The card is redrawn automatically when a race is saved or a
-  photo or color it uses changes; set `PUBLIC_URL` so previews use your public address.
-- **Editor**: drop in Race Monitor files, merge split sessions, set teams, colors and driver changes.
-- Light and dark mode, works on phones, zero dependencies.
-
-## Quick start
+## Running it
 
 ```bash
 docker run -d --name karting-hub -p 8080:8080 \
@@ -33,52 +17,35 @@ docker run -d --name karting-hub -p 8080:8080 \
   ghcr.io/cobredev/karting-hub:latest
 ```
 
-Open http://localhost:8080. Viewing is open to anyone with the URL; **+ New race** and **Edit** need the
-`ADMIN_TOKEN`. It starts empty: add your first race with **+ New race**.
+Anyone with the URL can view. Adding and editing races needs the admin token. A new install has no data.
 
-### Configuration
-
-| Variable | Default | Meaning |
+| Variable | Default | |
 | --- | --- | --- |
-| `ADMIN_TOKEN` | *(empty)* | Password for uploads and edits. Empty = read-only dashboard. |
-| `PORT` | `8080` | HTTP port inside the container. |
-| `DATA_DIR` | `/data` | Where races are stored (`/data/races/*.json`). Mount a volume here. |
-| `PUBLIC_URL` | *(guessed)* | The address friends use, e.g. `https://karting-hub.your-tailnet.ts.net`. Used in link previews. |
-| `PUID` / `PGID` | `99` / `100` | User and group the app runs as, and owns `/data` with (Unraid's `nobody:users`). |
+| `ADMIN_TOKEN` | empty | Password for editing. Leave empty for a read-only site. |
+| `PUBLIC_URL` | guessed from the request | Public address, used in link previews. |
+| `DATA_DIR` | `/data` | Where races, drivers, teams and photos are stored. |
+| `PORT` | `8080` | Port inside the container. |
+| `PUID` / `PGID` | `99` / `100` | User the app runs as (Unraid's `nobody:users`). |
 
-### Your data
+Mount `/data` on the host. Without a mapping the data lives in an anonymous volume, which Unraid leaves
+behind when it recreates the container on update. The container fixes the folder's ownership on start, then
+drops root. To back up, copy the folder.
 
-Every race is saved as one JSON file in `/data/races/` inside the container (plus the shared driver and team lists in
-`/data/drivers.json` and `/data/teams.json`, and profile photos in `/data/images/`), and written to disk the moment
-you click **Save race**. Map `/data` to a folder on the host and your races survive restarts, stops,
-container updates and re-creating the container. The Unraid template and `docker-compose.yml` already map it
-to `/mnt/user/appdata/karting-hub`.
-
-- **Always mount `/data`.** Without a mapping, Docker keeps the data in an anonymous volume. That survives a
-  restart but is left behind when the container is recreated, which is what an Unraid update does.
-- **Permissions are handled for you.** The container starts as root just long enough to give the data folder to
-  `PUID:PGID` (99:100 by default), then runs the app as that user. If you force a different user with
-  `--user`, that user must be able to write the folder; the container stops at startup with a clear message if
-  it can't.
-- **A new install starts empty.** The app creates `races/`, `drivers.json`, `teams.json` and `images/` on
-  first start and never overwrites existing files.
-- **Back up** by copying the folder. The Appdata Backup plugin on Unraid covers it automatically. To restore or
-  move servers, drop the `.json` files back into `races/`.
+After 10 wrong admin tokens in 15 minutes, that address can't edit for 15 minutes. Use a long random token
+(`openssl rand -hex 24`), especially if the site is public.
 
 ## Adding a race
 
-1. Click **+ New race** and enter your admin token at the bottom of the page.
-2. Drop in every Race Monitor `.txt` file. Upload both files for a kart when the race was split over two timing
-   sessions; they're merged by lap number. Check the **Kart #** column before clicking **Add to race**: it
-   comes from the file name (`7 2.txt` → 7) because the header sometimes shows a different transponder.
-3. For each kart, pick the team and then the drivers in order, with the last lap each one drove (leave the last
-   driver blank = to the finish). Both are dropdowns of the teams and drivers you've added; the team's roster
-   is listed first, and **+ New team…** / **+ New driver…** add one without leaving the race. The color box
-   next to a driver sets their personal color for every race (optional). The "likely pit laps" buttons add a driver change
-   after that lap.
+1. **New race**, then enter the admin token at the bottom of the editor.
+2. Add every `.txt` export. Long races are often split across two timing sessions; files for the same kart
+   are merged by lap number. The kart number comes from the file name (`7 2.txt` is kart 7) because the
+   header can show a different transponder, so check the Kart # column before **Add to race**.
+3. For each kart, pick the team and the drivers in order, with the last lap each one drove. Leave the last
+   driver's lap empty to mean "to the finish". The buttons under "Likely driver changes" fill in pit laps.
 4. **Save race**.
 
-There's also a CLI importer that produces the same JSON:
+Teams and drivers come from the Teams and Drivers pages. **New team…** and **New driver…** in the editor's
+dropdowns add one without leaving the race. There is also a command-line importer:
 
 ```bash
 node scripts/import.mjs --name "Saturday Enduro" --track "My Track" --date 2026-03-14 \
@@ -86,115 +53,63 @@ node scripts/import.mjs --name "Saturday Enduro" --track "My Track" --date 2026-
   --out race.json exports/*.txt
 ```
 
-See [docs/data-format.md](docs/data-format.md) for the file formats and how pit/slow laps are detected.
+[docs/data-format.md](docs/data-format.md) describes the export format, the stored JSON, and how pit and
+slow laps are detected.
 
-## Running on Unraid
+## Unraid
 
-Every push to `main` builds and publishes `ghcr.io/cobredev/karting-hub:latest` (see
-[Docker image builds](#docker-image-builds)).
+Install the template once from the terminal, then add the container from the Docker tab:
 
-- **Unraid template (recommended)**:
-  1. *Docker* tab → scroll to **Template repositories** → add `https://github.com/CobreDev/Karting-Hub`
-     on its own line → **Save**.
-  2. **Add Container** → **Template** dropdown → **karting-hub** (under the CobreDev section).
-  3. Set **Admin token** to something long and random, check the **Data** path, then **Apply**.
+```bash
+wget -O /boot/config/plugins/dockerMan/templates-user/my-karting-hub.xml \
+  https://raw.githubusercontent.com/CobreDev/Karting-Hub/main/unraid/karting-hub.xml
+```
 
-  The template is [`unraid/karting-hub.xml`](unraid/karting-hub.xml). To install it by hand instead, copy it
-  to `/boot/config/plugins/dockerMan/templates-user/my-karting-hub.xml`.
-- **Compose Manager plugin**: use [`docker-compose.yml`](docker-compose.yml) (change `ADMIN_TOKEN` first).
+**Add Container**, pick **karting-hub**, set the admin token and **Apply**. Data goes to
+`/mnt/user/appdata/karting-hub`. [`docker-compose.yml`](docker-compose.yml) works with the Compose Manager
+plugin instead.
 
-Races are stored in `/mnt/user/appdata/karting-hub`. The app runs as `99:100` (nobody:users), which
-matches Unraid's appdata ownership. To update, *Check for updates* / *Force update* in the Docker tab, or
-`docker compose pull && docker compose up -d`.
+### Sharing with Tailscale Funnel
 
-**Sharing outside your network:** `http://tower:8080` only works at home. To give friends a public HTTPS link,
-use Tailscale Funnel (below), a Cloudflare Tunnel, or your reverse proxy (SWAG / Nginx Proxy Manager). Whatever
-you use, set a long random `ADMIN_TOKEN` (e.g. `openssl rand -hex 24`): it's the only thing protecting edits.
-After 10 wrong tokens in 15 minutes, that address is locked out of editing for 15 minutes.
+The image works with Unraid's **Use Tailscale** option. In the Tailscale admin console, turn on MagicDNS and
+HTTPS certificates. Then edit the container: turn on Use Tailscale, set Tailscale Serve to `Funnel` and the
+serve port to `8080`, and apply. The container log prints a login link the first time. Set **Public URL** to
+the resulting `https://<hostname>.<tailnet>.ts.net` address so link previews point there.
 
-### Tailscale Funnel on Unraid
+## Builds
 
-Unraid 7 can put a container on your tailnet and publish it with Funnel. The image supports this: it starts as
-root so Unraid's Tailscale hook can run, then drops the app to `PUID:PGID`.
-
-1. In the Tailscale admin console, make sure **MagicDNS** and **HTTPS certificates** are on (*DNS* page), and that
-   your tailnet policy allows Funnel (the `funnel` node attribute; new tailnets allow it by default).
-2. Edit the **karting-hub** container and turn on **Use Tailscale**. Set:
-   - **Tailscale Hostname**: e.g. `karting`
-   - **Tailscale Serve**: `Funnel`
-   - **Tailscale Serve Port**: `8080` (the port *inside* the container)
-   - leave the state directory at its default so the login survives updates.
-3. **Apply**, then open the container's log (or the Tailscale page in Unraid). The first start prints a login
-   link; open it to add the container to your tailnet.
-4. Your friends' link is `https://karting.<your-tailnet>.ts.net`. Changes save straight from that page too,
-   once you enter the admin token.
-
-## Docker image builds
-
-[`.github/workflows/docker.yml`](.github/workflows/docker.yml) runs on every push and pull request:
-
-1. `npm test` (parser, stint and color tests).
-2. Builds the image for `linux/amd64` and `linux/arm64`.
-3. On pushes (not PRs), publishes to GitHub Container Registry:
-   - `main` → `latest` and `sha-<commit>`
-   - tag `v1.2.3` → `1.2.3`, `1.2`, `1`
-
-No secrets to set up: it uses the repository's built-in `GITHUB_TOKEN`. New GHCR packages are **private**;
-either make it public (GitHub → your profile → *Packages* → *karting-hub* → *Package settings* → *Change
-visibility*) or run `docker login ghcr.io` on the server with a token that has `read:packages`.
-
-To build locally instead: `docker build -t karting-hub .`
+[`.github/workflows/docker.yml`](.github/workflows/docker.yml) runs the tests, starts the image and checks
+that it runs as 99:100 and can save a race, then publishes to `ghcr.io/cobredev/karting-hub` for amd64 and
+arm64. Pushes to `main` publish `latest`; tags like `v1.2.3` publish `1.2.3`, `1.2` and `1`.
 
 ## Development
 
-Requires Node 20+. No install step: there are no dependencies.
+Node 20 or newer. There is nothing to install.
 
 ```bash
-ADMIN_TOKEN=dev npm start    # http://localhost:8080
-npm test                     # node --test
+ADMIN_TOKEN=dev npm start   # http://localhost:8080
+npm test
 ```
 
 ```
-server.js            HTTP server: static files + JSON API, stores races as files
-public/
-  index.html         page shell
-  app.js             the whole UI: routing, dashboard, chart, lap list, editor
-  style.css          theme tokens (light/dark) and layout
-  lib/race.js        parsing, merging, stint splitting, stats, formatting (shared with Node)
-  lib/color.js       OKLCH helpers: keep team and driver colors readable in light and dark mode
-  lib/images.js      photo ids, size limits, image type check (shared with the server)
-scripts/import.mjs   CLI: Race Monitor .txt files -> race JSON
-test/                node:test suites
-unraid/              Unraid container template and icon
-docs/                data format reference
+server.js              HTTP server and JSON API; data is files under DATA_DIR
+public/app.js          entry point: theme toggle and first route
+public/js/             UI modules: router, chart, photos, preview card, autosave, one file per page
+public/lib/            parsing, stats, colors and image checks, shared with the server and tests
+scripts/import.mjs     command-line importer
+unraid/                container template and icon
 ```
 
-### API
+API, all JSON. Writes need `Authorization: Bearer <ADMIN_TOKEN>`.
 
-| Method | Path | Auth | |
-| --- | --- | --- | --- |
-| GET | `/api/races` | – | Race summaries |
-| GET | `/api/races/:id` | – | Full race JSON |
-| PUT | `/api/races/:id` | Bearer token | Create/replace a race |
-| DELETE | `/api/races/:id` | Bearer token | Delete a race |
-| GET | `/api/drivers` | – | Saved driver list `{ drivers: [{ name, color }] }` |
-| PUT | `/api/drivers` | Bearer token | Replace the driver list |
-| GET | `/api/teams` | – | Saved team list `{ teams: [{ name, color, members: [{ driver, role }] }] }` |
-| PUT | `/api/teams` | Bearer token | Replace the team list (roster rules are validated) |
-| GET | `/api/images` | – | Which drivers/teams have photos `{ drivers: { id: version }, teams: {...} }` |
-| PUT | `/api/images/:drivers\|teams/:id` | Bearer token | Upload a photo (WebP/JPEG/PNG body, max 1 MB) |
-| DELETE | `/api/images/:drivers\|teams/:id` | Bearer token | Remove a photo |
-| GET | `/images/:drivers\|teams/:id?v=…` | – | The photo itself (cached forever per version) |
-| GET | `/api/config` | – | `{ editable }` (is `ADMIN_TOKEN` set?) |
-| GET | `/api/health` | – | Health check used by Docker |
+| | |
+| --- | --- |
+| `GET /api/races`, `GET /api/races/:id` | race list, one race |
+| `PUT /api/races/:id`, `DELETE /api/races/:id` | save, delete a race |
+| `GET /api/drivers`, `PUT /api/drivers` | driver list with colors |
+| `GET /api/teams`, `PUT /api/teams` | team list with colors and rosters |
+| `GET /api/images`, `PUT`/`DELETE /api/images/:kind/:id` | photos and preview cards |
+| `GET /api/config`, `GET /api/health` | whether editing is enabled; health check |
 
-## Automatic import from Race Monitor?
-
-Race Monitor has an API (`api.race-monitor.com`), but it's only for authorized apps and access is by request
-from Race Monitor. Until there's an API key, upload the `.txt` exports. The public results pages only show
-each kart's totals, not individual laps.
-
-## What's next
-
-See [ROADMAP.md](ROADMAP.md) for planned features (driver and team pages, race results, head-to-head,
-track records), exports/backups, and test and code-organization work.
+Race Monitor's own API needs approval from Race Monitor, so races are imported from the `.txt` exports.
+Planned work is in [ROADMAP.md](ROADMAP.md).
