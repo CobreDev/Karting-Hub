@@ -104,7 +104,7 @@ export function lapChart(el, karts, focus) {
     </svg>
     <div class="tooltip" id="tt" hidden></div>`;
 
-  const svg = el.querySelector('svg');
+  const svg = el.querySelector(':scope > svg');
   const xh = el.querySelector('#xh');
   const tt = el.querySelector('#tt');
   const hit = el.querySelector('#hit');
