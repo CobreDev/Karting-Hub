@@ -21,7 +21,8 @@ unless the owner asks.
 or Node APIs. Changes there need a test in `test/`.
 
 The repo contains no race data. Tests use small inline fixtures with made-up names. Never commit race
-exports, real names, or anything from `data/`.
+exports, real names, or anything from `data/`. The one exception is `ios/screenshots/`,
+which the owner chose to fill with screenshots of their own server.
 
 ## Data model
 
