@@ -84,11 +84,11 @@ hidden behind a long press on the logo above the race list. Build it with Xcode;
 [ios/README.md](ios/README.md).
 
 <p>
-<picture><source media="(prefers-color-scheme: dark)" srcset="ios/screenshots/1-races-dark.png"><img src="ios/screenshots/1-races-light.png" alt="Races" width="150"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="ios/screenshots/2-race-dark.png"><img src="ios/screenshots/2-race-light.png" alt="A race" width="150"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="ios/screenshots/3-chart-dark.png"><img src="ios/screenshots/3-chart-light.png" alt="Lap-time chart" width="150"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="ios/screenshots/4-driver-dark.png"><img src="ios/screenshots/4-driver-light.png" alt="A driver" width="150"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="ios/screenshots/5-teams-dark.png"><img src="ios/screenshots/5-teams-light.png" alt="Teams" width="150"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="ios/screenshots/1-race-dark.png"><img src="ios/screenshots/1-race-light.png" alt="A race" width="150"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="ios/screenshots/2-chart-dark.png"><img src="ios/screenshots/2-chart-light.png" alt="Lap-time chart" width="150"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="ios/screenshots/3-driver-dark.png"><img src="ios/screenshots/3-driver-light.png" alt="A driver" width="150"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="ios/screenshots/4-teams-dark.png"><img src="ios/screenshots/4-teams-light.png" alt="Teams" width="150"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="ios/screenshots/5-races-dark.png"><img src="ios/screenshots/5-races-light.png" alt="Races" width="150"></picture>
 </p>
 
 ## Builds
