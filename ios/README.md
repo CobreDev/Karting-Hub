@@ -70,6 +70,19 @@ Tests:
 xcodebuild -project KartingHub.xcodeproj -scheme KartingHub -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
 ```
 
+## Releasing
+
+1. Set `MARKETING_VERSION` in `project.yml` (and bump `CURRENT_PROJECT_VERSION`).
+2. Run `scripts/build-ipa.sh`. It builds an unsigned release `.ipa` at `build/release/Karting-Hub-v<version>.ipa`.
+3. Publish it on GitHub under the tag `ios-v<version>`, with the file named `Karting-Hub-v<version>.ipa`:
+
+```bash
+gh release create ios-v1.1 build/release/Karting-Hub-v1.1.ipa --title "Karting Hub for iPhone 1.1"
+```
+
+Use the `ios-v` prefix, not `v`: tags starting with `v` publish a Docker image version. The `.ipa` stays unsigned
+so it carries no Apple ID or device IDs; people sideload it with their own Apple ID (AltStore, Sideloadly).
+
 ## Code
 
 | File | |
