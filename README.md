@@ -76,7 +76,7 @@ HTTPS certificates. Then edit the container: turn on Use Tailscale, set Tailscal
 serve port to `8080`, and apply. The container log prints a login link the first time. Set **Public URL** to
 the resulting `https://<hostname>.<tailnet>.ts.net` address so link previews point there.
 
-## iPhone app
+## iOS app
 
 [`ios/`](ios/README.md) has a native SwiftUI app for the same server: races, the lap chart, lap-by-lap
 lists, drivers and teams, plus an admin mode for adding races and editing drivers and teams. Its settings are
@@ -105,7 +105,7 @@ public/js/             UI modules: router, chart, photos, preview card, autosave
 public/lib/            parsing, stats, colors and image checks, shared with the server and tests
 scripts/import.mjs     command-line importer
 unraid/                container template and icon
-ios/                   SwiftUI iPhone app (see ios/README.md)
+ios/                   SwiftUI iOS app for iPhone and iPad (see ios/README.md)
 ```
 
 API, all JSON. Writes need `Authorization: Bearer <ADMIN_TOKEN>`.

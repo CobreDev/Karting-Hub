@@ -1,4 +1,6 @@
-# Karting Hub for iPhone
+# Karting Hub for iOS
+
+Runs on iPhone and iPad.
 
 A native SwiftUI app for the same server. It reads and writes the server's JSON API (`/api/races`,
 `/api/drivers`, `/api/teams`, `/api/images`) and keeps nothing of its own except the server address and, in
@@ -77,7 +79,7 @@ xcodebuild -project KartingHub.xcodeproj -scheme KartingHub -destination 'platfo
 3. Publish it on GitHub under the tag `ios-v<version>`, with the file named `Karting-Hub-v<version>.ipa`:
 
 ```bash
-gh release create ios-v1.1 build/release/Karting-Hub-v1.1.ipa --title "Karting Hub for iPhone 1.1"
+gh release create ios-v1.1 build/release/Karting-Hub-v1.1.ipa --title "Karting Hub for iOS 1.1"
 ```
 
 Use the `ios-v` prefix, not `v`: tags starting with `v` publish a Docker image version. The `.ipa` stays unsigned
