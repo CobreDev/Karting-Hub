@@ -89,9 +89,6 @@ hidden behind a long press on the logo above the race list. Build it with Xcode;
 that it runs as 99:100 and can save a race, then publishes to `ghcr.io/cobredev/karting-hub` for amd64 and
 arm64. Pushes to `main` publish `latest`; tags like `v1.2.3` publish `1.2.3`, `1.2` and `1`.
 
-[`.github/workflows/ios.yml`](.github/workflows/ios.yml) runs the iOS app's tests when `ios/` changes, and
-tags like `ios-v1.1` build the unsigned `Karting-Hub-v1.1.ipa` and publish it as a GitHub release.
-
 ## Development
 
 Node 20 or newer. There is nothing to install.
