@@ -74,16 +74,25 @@ xcodebuild -project KartingHub.xcodeproj -scheme KartingHub -destination 'platfo
 
 ## Releasing
 
-1. Set `MARKETING_VERSION` in `project.yml` (and bump `CURRENT_PROJECT_VERSION`).
-2. Run `scripts/build-ipa.sh`. It builds an unsigned release `.ipa` at `build/release/Karting-Hub-v<version>.ipa`.
-3. Publish it on GitHub under the tag `ios-v<version>`, with the file named `Karting-Hub-v<version>.ipa`:
+GitHub Actions (`.github/workflows/ios.yml`) runs the Swift tests whenever `ios/` changes, and builds and
+publishes releases:
+
+1. Set `MARKETING_VERSION` in `project.yml` (and bump `CURRENT_PROJECT_VERSION`), commit and push.
+2. Tag that commit `ios-v<version>` and push the tag:
 
 ```bash
-gh release create ios-v1.1 build/release/Karting-Hub-v1.1.ipa --title "Karting Hub for iOS 1.1"
+git tag ios-v1.1 && git push origin ios-v1.1
 ```
 
-Use the `ios-v` prefix, not `v`: tags starting with `v` publish a Docker image version. The `.ipa` stays unsigned
-so it carries no Apple ID or device IDs; people sideload it with their own Apple ID (AltStore, Sideloadly).
+The workflow checks that the tag matches `MARKETING_VERSION`, builds the unsigned `.ipa` with
+`scripts/build-ipa.sh`, and creates the release "Karting Hub for iOS <version>" with
+`Karting-Hub-v<version>.ipa` attached. It can also be run by hand from the Actions tab ("Publish" checked
+builds and publishes the version in `project.yml`).
+
+Use the `ios-v` prefix, not `v`: tags starting with `v` publish a Docker image version. The `.ipa` stays
+unsigned so it carries no Apple ID or device IDs; people sideload it with their own Apple ID (AltStore,
+Sideloadly). To build one locally instead, run `scripts/build-ipa.sh`; it writes
+`build/release/Karting-Hub-v<version>.ipa`.
 
 ## Code
 
