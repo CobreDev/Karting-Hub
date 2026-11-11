@@ -1,0 +1,51 @@
+# Generate KartingHub.xcodeproj with `xcodegen` (brew install xcodegen). The .xcodeproj is not committed.
+name: KartingHub
+options:
+  bundleIdPrefix: com.cobredev
+  deploymentTarget:
+    iOS: "27.1"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+targets:
+  KartingHub:
+    type: application
+    platform: iOS
+    sources: [KartingHub]
+    info:
+      path: KartingHub/Info.plist
+      properties:
+        CFBundleDisplayName: Karting Hub
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        # plain http is allowed for local addresses only (a dev server, or the Unraid box on the LAN)
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.cobredev.kartinghub
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+  KartingHubTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [KartingHubTests]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: KartingHub
+schemes:
+  KartingHub:
+    build:
+      targets:
+        KartingHub: all
+        KartingHubTests: [test]
+    test:
+      targets: [KartingHubTests]

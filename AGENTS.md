@@ -54,6 +54,7 @@ different transponder. Stints are `[{ driver, toLap }]` in order, with `toLap: n
 | `public/js/preview.js` | Draws the 1200x630 link-preview card on a canvas and re-uploads it when a photo or color it uses changes. Uses the Hairline dark palette with a checkered edge; bump `CARD_DESIGN` when the card's look changes so saved cards get redrawn. |
 | `public/js/autosave.js` | Autosave for the Drivers and Teams pages. |
 | `public/js/pages/` | One module per page: home, race, editor, drivers, teams. |
+| `ios/` | SwiftUI iPhone app that reads and (in admin mode) writes the JSON API. `Admin.swift` ports `parseRaceMonitor` / `mergeLaps`. `RaceMath.swift` and `Theme.swift` port `race.js` and `color.js`: change them together and keep `KartingHubTests` matching `test/race.test.js`. See `ios/README.md`. |
 
 The server never decodes images. Photos are cropped and resized in the browser; the server checks the magic
 bytes and size and stores the file.
